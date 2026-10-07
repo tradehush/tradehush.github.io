@@ -4,7 +4,7 @@
 (() => {
   const CFG = window.SB_CONFIG || {};
   const LANG = document.documentElement.lang === "en" ? "en" : "ru";
-  const APP_FILE = "app.f1fd0c9c67.bin", WM0 = "wm00000000000000000000000000000000";
+  const APP_FILE = "app.ca7a2d0340.bin", WM0 = "wm00000000000000000000000000000000";
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const trSrv = t => { for (const [a, b] of Object.entries(window.__SRV || {})) t = t.split(a).join(b); return t; };

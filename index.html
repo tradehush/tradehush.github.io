@@ -757,6 +757,14 @@ table.trades tbody tr:hover td { background: rgba(255, 255, 255, .02) }
 #te-emo .warnbox b { color: var(--down); font-weight: 500; font-size: 13px }
 .mist-pick.sugg:not([aria-pressed="true"]) { border-style: dashed; border-color: var(--warn); color: var(--ink) }
 .mist-legend { margin: 6px 0 0; font-size: 12px }
+.kpi-edit { margin-left: 6px; font-size: 11px; text-transform: none; letter-spacing: 0 }
+.dl-box { width: min(420px, 100%) }
+.dl-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
+.dl-chips .seg-b { justify-content: center; padding: 8px 4px; border: 1px solid var(--line); border-radius: 9px }
+.dl-chips .seg-b[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+.day-lim .linklike { justify-self: start }
+@media (max-width: 350px) { .mainnav .nav-b { padding-inline: 0 } .mainnav .nav-b span { font-size: 9.5px; letter-spacing: -.02em } }
+.day-lim b { font-size: 15px } .day-lim small { font-weight: 400; color: var(--muted); font-size: 12px }
 .te-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px }
 .te-photos:empty { display: none }
 .te-ph { position: relative; margin: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--soft); aspect-ratio: 4 / 3 }
@@ -1065,5 +1073,5 @@ input[type="range"] { accent-color: var(--accent) }
   </main>
 </div>
 
-<script src="shell.88479a7042.js"></script>
+<script src="shell.a3ebfe5004.js"></script>
 </html>

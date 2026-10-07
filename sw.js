@@ -1,7 +1,7 @@
 // Offline cache. The page and settings are network-first so updates arrive at once;
 // history data, the OCR engine and icons are cache-first. Supabase and Telegram are never cached.
-const V = "sb-muy1cb4p";
-const SHELL = ["./", "en", "boot.js", "config.js", "manifest.webmanifest", "app.5d6d158954.bin", "shell.d37a3ac160.js", "app-en.0062858baa.bin", "shell-en.5b6d47986e.js", "lib/supabase.js", "lib/fonts/inter.css", "icons/icon-192.png", "icons/icon-512.png"];
+const V = "sb-muy1z88z";
+const SHELL = ["./", "en", "boot.js", "config.js", "manifest.webmanifest", "app.6952d8c402.bin", "shell.a741d2408f.js", "app-en.8dbf3df649.bin", "shell-en.64a11420ad.js", "lib/supabase.js", "lib/fonts/inter.css", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim()));

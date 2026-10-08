@@ -1,7 +1,7 @@
 // Offline cache. The page and settings are network-first so updates arrive at once;
 // history data, the OCR engine and icons are cache-first. Supabase and Telegram are never cached.
-const V = "sb-muypycs6";
-const SHELL = ["./", "en", "boot.js", "config.js", "manifest.webmanifest", "app.a0842060dd.bin", "shell.2e9f840b69.js", "app-en.24368ed902.bin", "shell-en.388c49a040.js", "lib/supabase.js", "lib/fonts/inter.css", "icons/icon-192.png", "icons/icon-512.png"];
+const V = "sb-muzialk0";
+const SHELL = ["./", "en", "boot.js", "config.js", "manifest.webmanifest", "app.da1cedafb9.bin", "shell.a36767a40b.js", "app-en.8d47069de7.bin", "shell-en.38cb8a334d.js", "lib/supabase.js", "lib/fonts/inter.css", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -9,6 +9,7 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin) return;
+  if (url.pathname.includes("/music/")) return; // audio comes in ranges (206) — the browser handles it, not the cache
   const longLived = /\/(data|vendor|icons|lib)\//.test(url.pathname) || /\/(app|shell)(-en)?\.[0-9a-f]{10}\.(js|bin)$/.test(url.pathname);
   if (longLived) {
     e.respondWith(caches.open(V).then(async c => {

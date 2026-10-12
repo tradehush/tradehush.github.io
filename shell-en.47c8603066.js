@@ -5,7 +5,7 @@ window.__SRV={"Администратор закрыл вам доступ":"The
 (() => {
   const CFG = window.SB_CONFIG || {};
   const LANG = document.documentElement.lang === "en" ? "en" : "ru";
-  const APP_FILE = "app-en.d0078e4765.bin", WM0 = "wm00000000000000000000000000000000";
+  const APP_FILE = "app-en.4ec53d28f0.bin", WM0 = "wm00000000000000000000000000000000";
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const trSrv = t => { for (const [a, b] of Object.entries(window.__SRV || {})) t = t.split(a).join(b); return t; };
@@ -258,9 +258,59 @@ window.__SRV={"Администратор закрыл вам доступ":"The
     sb.rpc("ref_claim", { p_code: r.code }).then(({ error }) => { if (!error) try { localStorage.removeItem("th.ref"); } catch {} }, () => {});
   }
 
+  // a public journal (?p=slug): read-only, no sign-in, only what its author chose to show
+  async function publicView(slug) {
+    document.body.classList.remove("gated");
+    document.body.innerHTML = `<main class="pj-page"><p class="hint">Загружаю журнал…</p></main>`;
+    const host = $(".pj-page");
+    const { data, error } = await sb.rpc("public_journal", { p_slug: slug });
+    const cta = `<a class="btn primary" href="./">Вести свой журнал в TradeHush — бесплатно</a>`;
+    if (error || !data?.data) { host.innerHTML = `<section class="pj-card"><h1>Журнал не найден</h1><p class="hint">Ссылка неверная или автор закрыл доступ.</p>${cta}</section>`; return; }
+    const D = data.data, cur = esc(D.cur || "USDT");
+    const n = (v, d = 2) => v == null || !isFinite(v) ? "—" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const R = v => v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "R";
+    const P = v => v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%";
+    const W = v => v == null ? "—" : Math.round(v * 100) + "%";
+    const sg = v => v > 0 ? "up" : v < 0 ? "down" : "";
+    const tile = (l, v, cls = "", sub = "") => `<div class="kpi"><span>${l}</span><b class="${cls}">${v}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+    const curve = c => {
+      if (!c || c.length < 2) return "";
+      const lo = Math.min(0, ...c), hi = Math.max(0, ...c), sp = hi - lo || 1, w = 640, h = 160, X = i => 8 + (w - 16) * i / (c.length - 1), Y = v => 8 + (h - 16) * (1 - (v - lo) / sp);
+      const pts = c.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" "), col = c[c.length - 1] >= 0 ? "var(--up)" : "var(--down)";
+      return `<svg viewBox="0 0 ${w} ${h}" class="pj-curve" preserveAspectRatio="none" role="img" aria-label="Кривая доходности"><line x1="8" x2="${w - 8}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+    };
+    const K = D.kpis, parts = [];
+    parts.push(`<header class="pj-head"><span class="eyebrow">Публичный журнал TradeHush</span><h1>${D.name ? "Журнал трейдера " + esc(D.name) : "Журнал трейдера"}</h1>
+      <p class="hint">Обновлён ${esc(new Date(data.updated_at).toLocaleString("en-US", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))}${D.since ? ` · статистика с ${esc(new Date(D.since).toLocaleDateString("en-US"))}` : ""}</p></header>`);
+    const tiles = [];
+    if (K) tiles.push(tile("Trades", K.n, "", `${K.wins} winners · ${K.losses} losers`), tile("Win rate", W(K.wr)), tile("Average R", R(K.avgR), sg(K.avgR), `total ${R(K.totalR)}`),
+      tile("Profit factor", K.pf === "inf" ? "∞" : K.pf == null ? "—" : Number(K.pf).toFixed(2), K.pf === "inf" || K.pf >= 1 ? "up" : "down"), tile("Max drawdown", K.dd ? "−" + Number(K.dd).toFixed(2) + "%" : "0%", K.dd ? "down" : ""));
+    if (D.pct != null) tiles.push(tile("Return", P(D.pct), sg(D.pct)));
+    if (D.money) tiles.push(tile("P&L", n(D.money.pnl), sg(D.money.pnl), cur), tile("Balance", n(D.money.balance), "", cur));
+    if (tiles.length) parts.push(`<section class="pj-card"><div class="kpis">${tiles.join("")}</div>${D.curve ? curve(D.curve) : ""}</section>`);
+    else if (D.curve) parts.push(`<section class="pj-card">${curve(D.curve)}</section>`);
+    if (D.strategies?.length) parts.push(`<section class="pj-card"><h2>Strategies</h2><div class="table-wrap"><table class="trades overview"><thead><tr><th>Strategy</th><th class="n">Trades</th><th class="n">Win rate</th><th class="n">Average R</th><th class="n">Total</th></tr></thead><tbody>
+      ${D.strategies.map(s => `<tr><td><b>${esc(s.title)}</b></td><td class="n">${s.n}</td><td class="n">${W(s.wr)}</td><td class="n ${sg(s.avgR)}">${R(s.avgR)}</td><td class="n ${sg(s.totalR)}">${R(s.totalR)}</td></tr>`).join("")}</tbody></table></div></section>`);
+    if (D.emotions?.length) parts.push(`<section class="pj-card"><h2>Emotions and results</h2><div class="table-wrap"><table class="trades overview"><thead><tr><th>Emotion</th><th class="n">Trades</th><th class="n">Win rate</th><th class="n">Average R</th></tr></thead><tbody>
+      ${D.emotions.map(e => `<tr><td><span class="emo" style="--ec:${esc(e.c)}"><i></i>${esc(e.l)}</span></td><td class="n">${e.n}</td><td class="n">${W(e.wr)}</td><td class="n ${sg(e.avgR)}">${R(e.avgR)}</td></tr>`).join("")}</tbody></table></div></section>`);
+    if (D.trades?.length) {
+      const pr = D.show?.prices, st = D.trades.some(t => t.st), em = D.trades.some(t => t.emo?.length), pc = D.trades.some(t => t.pct != null), pm = D.trades.some(t => t.pnl != null);
+      parts.push(`<section class="pj-card"><h2>Trades <small>${D.trades.length}${D.trades.length >= 300 ? " последних" : ""}</small></h2><div class="table-wrap"><table class="trades overview"><thead><tr><th>Date</th><th>Instrument</th>${st ? "<th>Strategy</th>" : ""}${pr ? '<th class="n">Entry</th><th class="n">Stop</th><th class="n">Exit</th>' : ""}<th class="n">R</th>${pc ? '<th class="n">%</th>' : ""}${pm ? '<th class="n">P&amp;L</th>' : ""}${em ? "<th>Emotions</th>" : ""}</tr></thead><tbody>
+        ${D.trades.map(t => `<tr class="${t.r > 0 ? "win" : t.r < 0 ? "loss" : ""}"><td>${esc(String(t.d || "").split("-").reverse().join("."))}</td><td><b>${esc(t.sym || "—")}</b><div class="meta-s">${t.side === "short" ? "short" : "long"}</div></td>${st ? `<td>${esc(t.st || "")}</td>` : ""}
+          ${pr ? `<td class="n">${esc(t.e ?? "")}</td><td class="n">${esc(t.s ?? "")}</td><td class="n">${esc(t.x ?? "")}</td>` : ""}<td class="n ${sg(t.r)}">${R(t.r)}</td>${pc ? `<td class="n ${sg(t.pct)}">${P(t.pct)}</td>` : ""}${pm ? `<td class="n ${sg(t.pnl)}">${n(t.pnl)}</td>` : ""}
+          ${em ? `<td>${(t.emo || []).map(([l, c]) => `<span class="emo" style="--ec:${esc(c)}"><i></i>${esc(l)}</span>`).join("")}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>`);
+    }
+    if (parts.length === 1) parts.push(`<section class="pj-card"><p class="hint">Автор пока ничего не открыл для просмотра.</p></section>`);
+    parts.push(`<footer class="pj-foot"><span>Журнал ведётся в TradeHush — эмоции, правила и разбор ошибок трейдера.</span>${cta}</footer>`);
+    host.innerHTML = parts.join("");
+    document.title = (D.name ? D.name + " — " : "") + "журнал трейдера · TradeHush";
+  }
+
   async function start() {
     if (!sb) return gate("config");
     const q = new URLSearchParams(location.search);
+    const pslug = (q.get("p") || "").trim().toLowerCase();
+    if (/^[a-z0-9_-]{3,32}$/.test(pslug)) return publicView(pslug);
     if (q.has("hash") && q.has("id") && q.has("auth_date")) {
       const user = {};
       for (const k of ["id", "first_name", "last_name", "username", "photo_url", "auth_date", "hash"]) if (q.has(k)) user[k] = q.get(k);

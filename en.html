@@ -757,6 +757,12 @@ table.trades tbody tr:hover td { background: rgba(255, 255, 255, .02) }
 #te-emo .warnbox b { color: var(--down); font-weight: 500; font-size: 13px }
 .mist-pick.sugg:not([aria-pressed="true"]) { border-style: dashed; border-color: var(--warn); color: var(--ink) }
 .mist-legend { margin: 6px 0 0; font-size: 12px }
+.tr-search { display: flex; gap: 8px; flex-wrap: wrap } .tr-search .in { flex: 1; min-width: 180px }
+.tr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 10px }
+.tr-card { display: grid; gap: 8px; text-align: left; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; transition: border-color .15s, transform .15s }
+.tr-card:hover { border-color: var(--accent); transform: translateY(-2px) }
+.tr-card b { font-size: 15px } .tr-card .tr-k { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted) } .tr-card .tr-k i { font-style: normal; color: var(--ink); font-weight: 600 }
+.tr-pub { display: grid; gap: 14px } .tr-pub .pj-card { background: var(--soft) }
 .pj-box { width: min(560px, 100%) }
 .pj-slug { display: flex; align-items: center; border: 1px solid var(--line2, var(--line)); border-radius: 10px; background: var(--soft); overflow: hidden }
 .pj-slug span { padding: 0 2px 0 10px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55% }
@@ -858,7 +864,13 @@ table.trades tbody tr:hover td { background: rgba(255, 255, 255, .02) }
 .nav-end { flex: none; margin-left: auto }
 .nav-menu > .btn { padding: 7px 12px }
 .nav-end { display: flex; align-items: center; gap: 0 }
-@media (min-width: 921px) { #overview-btn, #lib-btn, .nav-end .menu [data-music] { display: none } }
+@media (min-width: 921px) { .nav-end .menu [data-music] { display: none } }
+
+#traders-btn { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E") }
+#traders-btn::before { content: ""; display: inline-block; width: 15px; height: 15px; margin-right: 7px; vertical-align: -2px; flex: none; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; opacity: .95 }
+@media (min-width: 1440px) { #overview-btn, #lib-btn, #traders-btn { display: none } }
+@media (min-width: 1440px) { #nav-items .nav-b { padding-inline: 9px } } 
+@media (min-width: 921px) and (max-width: 1439px) { .nav-b[data-nav="library"], .nav-b[data-nav="overview"], .nav-b[data-nav="traders"] { display: none } }
 .nav-menu .menu { left: auto; right: 0 }
 @media (min-width: 921px) and (max-width: 1180px) { .nav-brand h1 { font-size: 0; gap: 0 } .nav-b { padding: 8px 9px } .mainnav { gap: 10px } }
 .app.wide { grid-template-columns: minmax(0, 1fr) }
@@ -871,6 +883,7 @@ table.trades tbody tr:hover td { background: rgba(255, 255, 255, .02) }
 .nav-b[data-nav="chart"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 5v4'/%3E%3Crect x='7' y='9' width='4' height='6' rx='1'/%3E%3Cpath d='M9 15v2'/%3E%3Cpath d='M17 3v2'/%3E%3Crect x='15' y='5' width='4' height='8' rx='1'/%3E%3Cpath d='M17 13v3'/%3E%3C/svg%3E"); --ic-c: #2BB3A3 }
 .nav-b[data-nav="trade"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/%3E%3C/svg%3E"); --ic-c: #33C27F }
 .nav-b[data-nav="analysis"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E"); --ic-c: #FF7AB6 }
+.nav-b[data-nav="traders"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E") }
 .nav-b[data-nav="library"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 6 4 14'/%3E%3Cpath d='M12 6v14'/%3E%3Cpath d='M8 8v12'/%3E%3Cpath d='M4 4v16'/%3E%3C/svg%3E"); --ic-c: #C38BFF }
 .nav-b[data-nav="overview"] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M18 17V9'/%3E%3Cpath d='M13 17V5'/%3E%3Cpath d='M8 17v-3'/%3E%3C/svg%3E"); --ic-c: #F08A3C }
 @media (max-width: 920px) {
@@ -920,7 +933,7 @@ h1, h2, h3, .view-title { letter-spacing: -0.02em }
 .tc-acts { display: flex; gap: 6px; justify-content: flex-start }
 .fab { display: none }
 @media (max-width: 920px) {
-  .nav-b[data-nav="library"] { display: none }
+  .nav-b[data-nav="library"], .nav-b[data-nav="traders"] { display: none }
   body.fab-on .fab { display: grid; place-items: center; position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 35; width: 56px; height: 56px; border-radius: 50%; border: 0;
     background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, #fff), color-mix(in srgb, var(--accent) 86%, #000)); color: var(--on-accent); font: 600 30px/1 var(--f-body); box-shadow: 0 10px 28px -6px color-mix(in srgb, var(--accent) 55%, transparent); cursor: pointer }
 }
@@ -1065,6 +1078,7 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent) }
         <div class="menu" hidden>
           <button type="button" id="overview-btn">Trade summary</button>
           <button type="button" id="lib-btn">Strategy library</button>
+          <button type="button" id="traders-btn" data-nav="traders">Трейдеры</button>
           <button type="button" data-look>Appearance</button>
           <button type="button" data-music>Calm music</button>
           <button type="button" id="pw-btn">Import journal (.json)</button>
@@ -1085,5 +1099,5 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent) }
   </main>
 </div>
 
-<script src="shell-en.47c8603066.js"></script>
+<script src="shell-en.ffa98ac393.js"></script>
 </html>

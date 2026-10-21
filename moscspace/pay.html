@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Оплата подписки — MoscSpace</title>
+<meta name="description" content="Аренда помещений в Москве — MoscSpace">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="logo" href="index.html">MoscSpace</a>
+    <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <div class="header-contacts">
+      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div class="addr"><b>Тверская, 21</b><br>Москва</div>
+      <a class="account-link" href="register.html">Войти</a>
+    </div>
+  </div>
+</header>
+<main>
+<section class="section dark">
+  <div class="wrap center">
+    <h1 id="plan-title" style="font-size:clamp(28px,4vw,40px)">Оплата подписки</h1>
+    <p class="lead" id="plan-info"></p>
+    <p class="notice hidden" id="need-login" style="max-width:560px;margin:18px auto 0">Чтобы подписка привязалась к аккаунту, сначала <a href="register.html">зарегистрируйтесь</a> — это займёт минуту.</p>
+    <form class="form wide" data-form="plan">
+      <div><div class="field"><input class="input" name="card" type="text" placeholder="Номер карты" data-v="card" inputmode="numeric" autocomplete="off" data-mask="card"><div class="error-text"></div></div></div>
+      <div><div class="field"><input class="input" name="exp" type="text" placeholder="Срок действия (ММ/ГГ)" data-v="expiry" inputmode="numeric" autocomplete="off" data-mask="expiry"><div class="error-text"></div></div></div>
+      <div class="span2"><div class="field"><input class="input" name="cvc" type="password" placeholder="CVC" data-v="cvc" inputmode="numeric" autocomplete="off" data-mask="cvc"><div class="error-text"></div></div></div>
+      <div class="span2 center"><button class="btn" type="submit">Подтвердить оплату <span class="pay-sum"></span></button></div>
+      <p class="notice span2">Учебный проект: оплата демонстрационная — деньги не списываются, данные карты никуда не отправляются и не сохраняются. Для проверки можно ввести тестовую карту 4242 4242 4242 4242, любой будущий срок и любой CVC.</p>
+    </form>
+    <p class="small" style="margin-top:30px">Другие тарифы: <a data-plan-switch="basic" href="pay.html?plan=basic">Базовый</a> <a data-plan-switch="optimal" href="pay.html?plan=optimal">Оптимальный</a> <a data-plan-switch="premium" href="pay.html?plan=premium">Премиум</a> · <a href="subscriptions.html">сравнить</a></p>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
+      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+    </div>
+    <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
+  </div>
+</footer>
+</body>
+</html>

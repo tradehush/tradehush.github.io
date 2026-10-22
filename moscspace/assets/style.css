@@ -136,7 +136,7 @@ p { margin: 0 0 1em; }
 @media (max-width: 520px) { .offer-card { grid-template-columns: 1fr; } }
 
 .pic-office { background: linear-gradient(180deg, #2a2c6e 0%, #b04ba3 45%, #f08a6b 60%, #1a1b30 62%, #0a0b18 100%); }
-.pic-coworking { background: linear-gradient(180deg, #e9eef2 0%, #9fc6dd 40%, #3f86b1 55%, #c8a57a 70%, #8b6844 100%); }
+.pic-coworking { background: url("coworking.jpg") center / cover no-repeat, #9fc6dd; }
 .pic-hall { background: url("hall.jpg") center / cover no-repeat, #dcdcdc; }
 .pic-warehouse { background: url("warehouse.jpg") center / cover no-repeat, #4b5f86; }
 

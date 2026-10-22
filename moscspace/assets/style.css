@@ -138,7 +138,7 @@ p { margin: 0 0 1em; }
 .pic-office { background: linear-gradient(180deg, #2a2c6e 0%, #b04ba3 45%, #f08a6b 60%, #1a1b30 62%, #0a0b18 100%); }
 .pic-coworking { background: linear-gradient(180deg, #e9eef2 0%, #9fc6dd 40%, #3f86b1 55%, #c8a57a 70%, #8b6844 100%); }
 .pic-hall { background: linear-gradient(180deg, #f3f3f3 0%, #dcdcdc 40%, #7a5a3a 65%, #3a2b20 100%); }
-.pic-warehouse { background: repeating-linear-gradient(90deg, #4b5f86 0 10px, #c9a46b 10px 28px, #3a3a3a 28px 32px), #444; }
+.pic-warehouse { background: url("warehouse.jpg") center / cover no-repeat, #4b5f86; }
 
 .icon-circle { width: 96px; height: 96px; border-radius: 50%; background: #e5e5e5; display: grid; place-items: center; margin: 0 auto 18px; }
 .icon-circle svg { width: 46px; height: 46px; stroke: #111; fill: none; stroke-width: 1.6; }

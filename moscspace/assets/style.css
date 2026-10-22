@@ -321,7 +321,7 @@ p { margin: 0 0 1em; }
 .pic-w-b { background: url("wh-b.jpg") center / cover no-repeat, #555; }
 .pic-w-c { background: url("wh-c.jpg") center / cover no-repeat, #555; }
 .pic-w-cold { background: url("wh-cold.jpg") center / cover no-repeat, #555; }
-.pic-w-open { background: url("wh-open.jpg") center / cover no-repeat, #555; }
+.pic-production { background: url("production.jpg") center / cover no-repeat, #555; }
 .pic-h-small { background: url("hall-small.jpg") center / cover no-repeat, #555; }
 .pic-h-big { background: url("hall-big.jpg") center / cover no-repeat, #555; }
 .pic-s-arbat { background: url("shop-arbat.jpg") center / cover no-repeat, #555; }

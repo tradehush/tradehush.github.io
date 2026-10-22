@@ -323,3 +323,10 @@ p { margin: 0 0 1em; }
 .pic-w-c { background: url("wh-c.jpg") center / cover no-repeat, #555; }
 .pic-w-cold { background: url("wh-cold.jpg") center / cover no-repeat, #555; }
 .pic-w-open { background: url("wh-open.jpg") center / cover no-repeat, #555; }
+.pic-h-small { background: url("hall-small.jpg") center / cover no-repeat, #555; }
+.pic-h-big { background: url("hall-big.jpg") center / cover no-repeat, #555; }
+.pic-s-arbat { background: url("shop-arbat.jpg") center / cover no-repeat, #555; }
+.pic-s-street { background: url("shop-street.jpg") center / cover no-repeat, #555; }
+.pic-cafe { background: url("cafe.jpg") center / cover no-repeat, #555; }
+.pic-s-mall { background: url("shop-mall.jpg") center / cover no-repeat, #555; }
+.pic-o-park { background: url("office-park.jpg") center / cover no-repeat, #555; }

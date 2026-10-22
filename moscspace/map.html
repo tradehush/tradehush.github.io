@@ -6,7 +6,9 @@
 <title>Карта и AI-помощник — MoscSpace</title>
 <meta name="description" content="Аренда помещений в Москве — MoscSpace">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="assets/style.css">
+<script src="assets/vendor/leaflet/leaflet.js" defer></script>
 <script src="assets/app.js" defer></script>
 </head>
 <body>
@@ -25,25 +27,14 @@
 <main>
 <div class="map-layout">
   <div class="map-box" id="map-box">
-    <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Схема Москвы со свободными помещениями">
-      <rect width="100" height="100" fill="#24313a"/>
-      <ellipse cx="50" cy="50" rx="38" ry="42" fill="#2c3b45" stroke="#5f7380" stroke-width=".6"/>
-      <ellipse cx="50" cy="49" rx="17" ry="16" fill="none" stroke="#4d5f6b" stroke-width=".5" stroke-dasharray="1.5 1"/>
-      <ellipse cx="50" cy="48" rx="7.5" ry="7" fill="none" stroke="#6f8593" stroke-width=".5"/>
-      <path d="M8 46 C 22 40, 28 56, 38 52 S 46 56, 52 52 S 58 60, 62 64 S 74 70, 92 76" fill="none" stroke="#3f7ea6" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M50 8 L50 92 M8 50 L92 50 M20 20 L80 80 M80 20 L20 80" stroke="#3a4a55" stroke-width=".35"/>
-      <rect x="47.6" y="47" width="2.6" height="2.2" fill="#c0564b" opacity=".8"/>
-      <text x="50.2" y="45.5" font-size="1.8" fill="#cfd8de" text-anchor="middle" font-family="Arial">Кремль</text>
-      <text x="85" y="20" font-size="2" fill="#8aa0ad" font-family="Arial">МКАД</text>
-      <text x="64" y="37" font-size="1.6" fill="#8aa0ad" font-family="Arial">ТТК</text>
-      <g id="markers"></g>
-    </svg>
+    <div id="leaflet-map" role="application" aria-label="Карта Москвы со свободными помещениями"></div>
     <div class="map-legend" id="map-legend"></div>
     <div class="map-popup hidden" id="map-popup"></div>
+    <div class="map-note hidden" id="map-note">Карта-подложка не загрузилась. Откройте сайт с хостинга (например, Netlify) — там будет полная карта Москвы.</div>
   </div>
   <div class="assistant">
     <h2 style="font-size:26px">Привет! Я твой AI-помощник</h2>
-    <p class="small muted">Напиши мне, например: «Нужен офис на 10 человек у метро Чкаловская на среду», и я выберу лучшие варианты. Выше представлена карта Москвы с расположением всех свободных помещений для аренды.</p>
+    <p class="small muted">Напиши мне, например: «Нужен офис на 10 человек у метро Чкаловская на среду», и я выберу лучшие варианты. Рядом — карта Москвы с расположением всех свободных помещений для аренды.</p>
     <div class="chips">
       <button class="chip" type="button">Нужен офис на 10 человек у метро Чкаловская на среду</button>
       <button class="chip" type="button">Склад от 300 м² до 500 тыс</button>

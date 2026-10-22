@@ -240,7 +240,6 @@ p { margin: 0 0 1em; }
 .map-layout { display: grid; grid-template-columns: 1.2fr 1fr; min-height: calc(100vh - 120px); }
 @media (max-width: 900px) { .map-layout { grid-template-columns: 1fr; } }
 .map-box { position: relative; background: #24313a; min-height: 420px; }
-.map-box svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .map-box .marker { cursor: pointer; }
 .map-box .marker circle { transition: r .15s; }
 .map-box .marker.active circle.dot { fill: var(--accent); }
@@ -330,3 +329,23 @@ p { margin: 0 0 1em; }
 .pic-cafe { background: url("cafe.jpg") center / cover no-repeat, #555; }
 .pic-s-mall { background: url("shop-mall.jpg") center / cover no-repeat, #555; }
 .pic-o-park { background: url("office-park.jpg") center / cover no-repeat, #555; }
+
+/* интерактивная карта (Leaflet + OpenStreetMap) */
+#leaflet-map { position: absolute; inset: 0; z-index: 0; background: #e8e6df; }
+.map-legend { z-index: 500; left: 60px; right: 16px; }
+.map-popup { z-index: 600; display: grid; grid-template-columns: 120px 1fr; gap: 14px; padding: 12px; }
+.map-popup.hidden { display: none; }
+.map-popup .pop-pic { border-radius: 8px; min-height: 110px; }
+.map-popup h4 { margin: 2px 0 4px; padding-right: 24px; }
+.legend-item { border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer; padding: 2px 4px; border-radius: 6px; color: #111; }
+.legend-item:hover { background: #eee; }
+.legend-item.off { opacity: .35; text-decoration: line-through; }
+.leaflet-container { font: inherit; }
+@media (max-width: 520px) { .map-popup { grid-template-columns: 90px 1fr; } }
+.map-box { isolation: isolate; }
+@media (max-width: 900px) {
+  .map-box { min-height: 70vh; }
+  .map-legend { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; }
+}
+.map-note { position: absolute; left: 60px; right: 16px; top: 120px; z-index: 550; background: #fff8d6; color: #111; font-size: 13px; padding: 10px 14px; border-radius: 8px; }
+@media (max-width: 900px) { .map-note { top: 70px; } }

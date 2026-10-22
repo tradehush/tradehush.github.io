@@ -25,24 +25,24 @@
 
   // x, y — положение на схеме карты (0–100), центр Москвы ≈ 50,50
   var LISTINGS = [
-    { id: "office-center", pic: "pic-o-city", type: "office", title: "Офис в Москва-Сити с панорамным видом", price: 350000, unit: "мес", area: 120, people: 20, metro: "Выставочная", district: "ЦАО", metroMin: 3, highwayKm: 0.5, power: 30, ceiling: 3.2, water: 2, vent: true, heat: true, x: 37, y: 47 },
-    { id: "office-tverskaya", pic: "pic-o-premium", type: "office", title: "Офис на Тверской, 21", price: 280000, unit: "мес", area: 85, people: 14, metro: "Пушкинская", district: "ЦАО", metroMin: 2, highwayKm: 1.2, power: 20, ceiling: 3.4, water: 1, vent: true, heat: true, x: 48, y: 45 },
-    { id: "office-chistye", pic: "pic-o-classic", type: "office", title: "Офис у Чистых прудов", price: 150000, unit: "мес", area: 55, people: 10, metro: "Чистые пруды", district: "ЦАО", metroMin: 4, highwayKm: 1.5, power: 15, ceiling: 3, water: 1, vent: true, heat: true, x: 54, y: 46 },
-    { id: "office-savelovskaya", pic: "pic-o-green", type: "office", title: "Офис в БЦ класса B", price: 120000, unit: "мес", area: 70, people: 12, metro: "Савёловская", district: "САО", metroMin: 6, highwayKm: 0.8, power: 15, ceiling: 3, water: 1, vent: true, heat: true, x: 48, y: 36 },
-    { id: "office-chkalovskaya", pic: "pic-o-small", type: "office", title: "Офис на 10–15 человек у Курского вокзала", price: 190000, unit: "мес", area: 75, people: 15, metro: "Чкаловская", district: "ЦАО", metroMin: 2, highwayKm: 0.6, power: 20, ceiling: 3.1, water: 1, vent: true, heat: true, x: 58, y: 49 },
-    { id: "coworking", type: "coworking", title: "Рабочее место в коворкинге", price: 18000, unit: "мес", area: 6, people: 1, metro: "Белорусская", district: "ЦАО", metroMin: 5, highwayKm: 0.3, power: 1, ceiling: 3.2, water: 0, vent: true, heat: true, x: 44, y: 41 },
-    { id: "hall-12", pic: "pic-h-small", type: "hall", title: "Переговорная на 12 человек", price: 2500, unit: "час", area: 30, people: 12, metro: "Чкаловская", district: "ЦАО", metroMin: 3, highwayKm: 0.6, power: 5, ceiling: 3, water: 0, vent: true, heat: true, x: 59, y: 50 },
-    { id: "hall-40", pic: "pic-h-big", type: "hall", title: "Конференц-зал на 40 человек", price: 6000, unit: "час", area: 90, people: 40, metro: "Павелецкая", district: "ЦАО", metroMin: 4, highwayKm: 0.4, power: 10, ceiling: 4, water: 1, vent: true, heat: true, x: 54, y: 56 },
-    { id: "warehouse-a", pic: "pic-w-a", type: "warehouse", title: "Склад класса A, 1200 м²", price: 900000, unit: "мес", area: 1200, people: 0, metro: "Кантемировская", district: "ЮАО", metroMin: 15, highwayKm: 1, power: 150, ceiling: 12, water: 2, vent: true, heat: true, x: 53, y: 75 },
-    { id: "warehouse-b", pic: "pic-w-b", type: "warehouse", title: "Склад класса B, 400 м²", price: 260000, unit: "мес", area: 400, people: 0, metro: "Шоссе Энтузиастов", district: "ВАО", metroMin: 10, highwayKm: 0.5, power: 60, ceiling: 8, water: 1, vent: true, heat: false, x: 70, y: 49 },
-    { id: "warehouse-c", pic: "pic-w-c", type: "warehouse", title: "Склад класса C, 250 м²", price: 110000, unit: "мес", area: 250, people: 0, metro: "Медведково", district: "СВАО", metroMin: 12, highwayKm: 0.7, power: 30, ceiling: 6, water: 0, vent: false, heat: false, x: 60, y: 18 },
-    { id: "shop-arbat", pic: "pic-s-arbat", type: "shop", title: "Торговое помещение на Арбате", price: 450000, unit: "мес", area: 90, people: 0, metro: "Арбатская", district: "ЦАО", metroMin: 3, highwayKm: 1, power: 25, ceiling: 3.6, water: 1, vent: true, heat: true, x: 46, y: 49 },
-    { id: "shop-sokol", pic: "pic-s-street", type: "shop", title: "Стрит-ритейл у метро Сокол", price: 210000, unit: "мес", area: 65, people: 0, metro: "Сокол", district: "САО", metroMin: 1, highwayKm: 0.2, power: 15, ceiling: 3.3, water: 1, vent: true, heat: true, x: 39, y: 33 },
-    { id: "shop-cheremushki", pic: "pic-s-mall", type: "shop", title: "Помещение в ТЦ, 60 м²", price: 140000, unit: "мес", area: 60, people: 0, metro: "Новые Черёмушки", district: "ЮЗАО", metroMin: 5, highwayKm: 1.3, power: 15, ceiling: 3.5, water: 1, vent: true, heat: true, x: 41, y: 66 },
-    { id: "catering-novoslob", pic: "pic-cafe", type: "catering", title: "Помещение под кафе, 110 м²", price: 320000, unit: "мес", area: 110, people: 0, metro: "Новослободская", district: "ЦАО", metroMin: 2, highwayKm: 0.9, power: 40, ceiling: 3.8, water: 2, vent: true, heat: true, x: 47, y: 40 },
-    { id: "production-tekst", pic: "pic-w-open", type: "production", title: "Производственное помещение, 600 м²", price: 380000, unit: "мес", area: 600, people: 0, metro: "Текстильщики", district: "ЮВАО", metroMin: 9, highwayKm: 0.6, power: 200, ceiling: 6, water: 2, vent: true, heat: true, x: 66, y: 63 },
-    { id: "office-krylatskoe", pic: "pic-o-park", type: "office", title: "Офис в бизнес-парке, 140 м²", price: 210000, unit: "мес", area: 140, people: 25, metro: "Крылатское", district: "ЗАО", metroMin: 8, highwayKm: 1.1, power: 35, ceiling: 3.2, water: 1, vent: true, heat: true, x: 24, y: 52 },
-    { id: "warehouse-szao", pic: "pic-w-cold", type: "warehouse", title: "Склад с рампой, 700 м²", price: 420000, unit: "мес", area: 700, people: 0, metro: "Планерная", district: "СЗАО", metroMin: 14, highwayKm: 0.4, power: 80, ceiling: 9, water: 1, vent: true, heat: true, x: 28, y: 26 }
+    { id: "office-center", lat: 55.7495, lng: 37.5395, pic: "pic-o-city", type: "office", title: "Офис в Москва-Сити с панорамным видом", price: 350000, unit: "мес", area: 120, people: 20, metro: "Выставочная", district: "ЦАО", metroMin: 3, highwayKm: 0.5, power: 30, ceiling: 3.2, water: 2, vent: true, heat: true, x: 37, y: 47 },
+    { id: "office-tverskaya", lat: 55.7652, lng: 37.6058, pic: "pic-o-premium", type: "office", title: "Офис на Тверской, 21", price: 280000, unit: "мес", area: 85, people: 14, metro: "Пушкинская", district: "ЦАО", metroMin: 2, highwayKm: 1.2, power: 20, ceiling: 3.4, water: 1, vent: true, heat: true, x: 48, y: 45 },
+    { id: "office-chistye", lat: 55.7642, lng: 37.6402, pic: "pic-o-classic", type: "office", title: "Офис у Чистых прудов", price: 150000, unit: "мес", area: 55, people: 10, metro: "Чистые пруды", district: "ЦАО", metroMin: 4, highwayKm: 1.5, power: 15, ceiling: 3, water: 1, vent: true, heat: true, x: 54, y: 46 },
+    { id: "office-savelovskaya", lat: 55.793, lng: 37.5862, pic: "pic-o-green", type: "office", title: "Офис в БЦ класса B", price: 120000, unit: "мес", area: 70, people: 12, metro: "Савёловская", district: "САО", metroMin: 6, highwayKm: 0.8, power: 15, ceiling: 3, water: 1, vent: true, heat: true, x: 48, y: 36 },
+    { id: "office-chkalovskaya", lat: 55.757, lng: 37.6615, pic: "pic-o-small", type: "office", title: "Офис на 10–15 человек у Курского вокзала", price: 190000, unit: "мес", area: 75, people: 15, metro: "Чкаловская", district: "ЦАО", metroMin: 2, highwayKm: 0.6, power: 20, ceiling: 3.1, water: 1, vent: true, heat: true, x: 58, y: 49 },
+    { id: "coworking", lat: 55.7768, lng: 37.5845, type: "coworking", title: "Рабочее место в коворкинге", price: 18000, unit: "мес", area: 6, people: 1, metro: "Белорусская", district: "ЦАО", metroMin: 5, highwayKm: 0.3, power: 1, ceiling: 3.2, water: 0, vent: true, heat: true, x: 44, y: 41 },
+    { id: "hall-12", lat: 55.7548, lng: 37.6572, pic: "pic-h-small", type: "hall", title: "Переговорная на 12 человек", price: 2500, unit: "час", area: 30, people: 12, metro: "Чкаловская", district: "ЦАО", metroMin: 3, highwayKm: 0.6, power: 5, ceiling: 3, water: 0, vent: true, heat: true, x: 59, y: 50 },
+    { id: "hall-40", lat: 55.7305, lng: 37.6385, pic: "pic-h-big", type: "hall", title: "Конференц-зал на 40 человек", price: 6000, unit: "час", area: 90, people: 40, metro: "Павелецкая", district: "ЦАО", metroMin: 4, highwayKm: 0.4, power: 10, ceiling: 4, water: 1, vent: true, heat: true, x: 54, y: 56 },
+    { id: "warehouse-a", lat: 55.634, lng: 37.66, pic: "pic-w-a", type: "warehouse", title: "Склад класса A, 1200 м²", price: 900000, unit: "мес", area: 1200, people: 0, metro: "Кантемировская", district: "ЮАО", metroMin: 15, highwayKm: 1, power: 150, ceiling: 12, water: 2, vent: true, heat: true, x: 53, y: 75 },
+    { id: "warehouse-b", lat: 55.7565, lng: 37.755, pic: "pic-w-b", type: "warehouse", title: "Склад класса B, 400 м²", price: 260000, unit: "мес", area: 400, people: 0, metro: "Шоссе Энтузиастов", district: "ВАО", metroMin: 10, highwayKm: 0.5, power: 60, ceiling: 8, water: 1, vent: true, heat: false, x: 70, y: 49 },
+    { id: "warehouse-c", lat: 55.8885, lng: 37.664, pic: "pic-w-c", type: "warehouse", title: "Склад класса C, 250 м²", price: 110000, unit: "мес", area: 250, people: 0, metro: "Медведково", district: "СВАО", metroMin: 12, highwayKm: 0.7, power: 30, ceiling: 6, water: 0, vent: false, heat: false, x: 60, y: 18 },
+    { id: "shop-arbat", lat: 55.7505, lng: 37.596, pic: "pic-s-arbat", type: "shop", title: "Торговое помещение на Арбате", price: 450000, unit: "мес", area: 90, people: 0, metro: "Арбатская", district: "ЦАО", metroMin: 3, highwayKm: 1, power: 25, ceiling: 3.6, water: 1, vent: true, heat: true, x: 46, y: 49 },
+    { id: "shop-sokol", lat: 55.8058, lng: 37.516, pic: "pic-s-street", type: "shop", title: "Стрит-ритейл у метро Сокол", price: 210000, unit: "мес", area: 65, people: 0, metro: "Сокол", district: "САО", metroMin: 1, highwayKm: 0.2, power: 15, ceiling: 3.3, water: 1, vent: true, heat: true, x: 39, y: 33 },
+    { id: "shop-cheremushki", lat: 55.6705, lng: 37.556, pic: "pic-s-mall", type: "shop", title: "Помещение в ТЦ, 60 м²", price: 140000, unit: "мес", area: 60, people: 0, metro: "Новые Черёмушки", district: "ЮЗАО", metroMin: 5, highwayKm: 1.3, power: 15, ceiling: 3.5, water: 1, vent: true, heat: true, x: 41, y: 66 },
+    { id: "catering-novoslob", lat: 55.7805, lng: 37.6025, pic: "pic-cafe", type: "catering", title: "Помещение под кафе, 110 м²", price: 320000, unit: "мес", area: 110, people: 0, metro: "Новослободская", district: "ЦАО", metroMin: 2, highwayKm: 0.9, power: 40, ceiling: 3.8, water: 2, vent: true, heat: true, x: 47, y: 40 },
+    { id: "production-tekst", lat: 55.708, lng: 37.734, pic: "pic-w-open", type: "production", title: "Производственное помещение, 600 м²", price: 380000, unit: "мес", area: 600, people: 0, metro: "Текстильщики", district: "ЮВАО", metroMin: 9, highwayKm: 0.6, power: 200, ceiling: 6, water: 2, vent: true, heat: true, x: 66, y: 63 },
+    { id: "office-krylatskoe", lat: 55.758, lng: 37.406, pic: "pic-o-park", type: "office", title: "Офис в бизнес-парке, 140 м²", price: 210000, unit: "мес", area: 140, people: 25, metro: "Крылатское", district: "ЗАО", metroMin: 8, highwayKm: 1.1, power: 35, ceiling: 3.2, water: 1, vent: true, heat: true, x: 24, y: 52 },
+    { id: "warehouse-szao", lat: 55.862, lng: 37.433, pic: "pic-w-cold", type: "warehouse", title: "Склад с рампой, 700 м²", price: 420000, unit: "мес", area: 700, people: 0, metro: "Планерная", district: "СЗАО", metroMin: 14, highwayKm: 0.4, power: 80, ceiling: 9, water: 1, vent: true, heat: true, x: 28, y: 26 }
   ];
 
   var PLANS = {
@@ -509,24 +509,60 @@
 
   // ---------- карта ----------
   function initMap() {
-    var svg = $("#map-svg");
-    if (!svg) return;
-    var g = $("#markers", svg), popup = $("#map-popup");
-    g.innerHTML = LISTINGS.map(function (l) {
-      return "<g class='marker' data-id='" + l.id + "' transform='translate(" + l.x + " " + l.y + ")'><circle r='2.4' fill='#fff' opacity='.35'/><circle class='dot' r='1.4' fill='" + TYPE_COLORS[l.type] + "' stroke='#fff' stroke-width='.35'/></g>";
+    var box = $("#leaflet-map");
+    if (!box || !window.L) return;
+    var popup = $("#map-popup"), hidden = {}, markers = {};
+    var map = L.map(box, { zoomControl: true, scrollWheelZoom: true }).setView([55.751, 37.618], 11);
+    map.attributionControl.setPrefix("<a href='https://leafletjs.com' target='_blank' rel='noopener'>Leaflet</a>");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; <a href='https://www.openstreetmap.org/copyright' target='_blank' rel='noopener'>участники OpenStreetMap</a>"
+    }).on("tileerror", function () {
+      // подложка не загрузилась (нет интернета или хостинг запрещает внешние картинки) — точки всё равно работают
+      var n = $("#map-note");
+      if (n) n.classList.remove("hidden");
+    }).addTo(map);
+    LISTINGS.forEach(function (l) {
+      var m = L.circleMarker([l.lat, l.lng], { radius: 9, color: "#fff", weight: 2, fillColor: TYPE_COLORS[l.type], fillOpacity: 1 })
+        .bindTooltip(esc(l.title) + "<br><b>" + money(l.price) + " / " + l.unit + "</b>", { direction: "top", offset: [0, -8] })
+        .on("click", function () { show(l.id); })
+        .addTo(map);
+      markers[l.id] = m;
+    });
+    map.fitBounds(L.featureGroup(Object.keys(markers).map(function (k) { return markers[k]; })).getBounds(), { padding: [30, 30] });
+
+    // легенда = переключатели типов
+    var legend = $("#map-legend");
+    legend.innerHTML = Object.keys(TYPES).map(function (k) {
+      return "<button type='button' class='legend-item' data-type='" + k + "'><i style='background:" + TYPE_COLORS[k] + "'></i>" + TYPES[k] + "</button>";
     }).join("");
-    $("#map-legend").innerHTML = Object.keys(TYPES).map(function (k) { return "<span><i style='background:" + TYPE_COLORS[k] + "'></i>" + TYPES[k] + "</span>"; }).join("");
+    legend.addEventListener("click", function (e) {
+      var b = e.target.closest(".legend-item");
+      if (!b) return;
+      var t = b.dataset.type;
+      hidden[t] = !hidden[t];
+      b.classList.toggle("off", hidden[t]);
+      LISTINGS.forEach(function (l) {
+        if (l.type !== t) return;
+        if (hidden[t]) map.removeLayer(markers[l.id]); else markers[l.id].addTo(map);
+      });
+    });
+
     function show(id) {
       var l = LISTINGS.filter(function (x) { return x.id === id; })[0];
       if (!l) return;
-      $$(".marker", g).forEach(function (m) { m.classList.toggle("active", m.dataset.id === id); });
+      if (hidden[l.type]) { hidden[l.type] = false; markers[l.id].addTo(map); var b = $(".legend-item[data-type='" + l.type + "']"); if (b) b.classList.remove("off"); }
+      Object.keys(markers).forEach(function (k) { markers[k].setStyle({ radius: k === id ? 13 : 9, weight: k === id ? 4 : 2 }); });
+      map.setView([l.lat, l.lng], Math.max(map.getZoom(), 13), { animate: true });
       var href = l.unit === "час" ? "halls.html#book" : "booking.html?item=" + l.id;
-      popup.innerHTML = "<button class='close' type='button' aria-label='Закрыть'>×</button><h4>" + esc(l.title) + "</h4><div>" + money(l.price) + " / " + l.unit + " · " + l.area + " м²</div><div class='small muted'>м. " + l.metro + " · " + l.district + "</div><a class='btn black' style='margin-top:10px;padding:10px 18px' href='" + href + "'>Забронировать</a>";
+      popup.innerHTML = "<button class='close' type='button' aria-label='Закрыть'>×</button><div class='pop-pic " + (l.pic || TYPE_PICS[l.type]) + "'></div><div class='pop-body'><span class='small muted'>" + TYPES[l.type] + "</span><h4>" + esc(l.title) + "</h4><div><b>" + money(l.price) + " / " + l.unit + "</b> · " + l.area + " м²</div><div class='small muted'>м. " + l.metro + " (" + l.metroMin + " мин) · " + l.district + "</div><a class='btn black' style='margin-top:10px;padding:10px 18px' href='" + href + "'>Забронировать</a></div>";
       popup.classList.remove("hidden");
     }
-    g.addEventListener("click", function (e) { var m = e.target.closest(".marker"); if (m) show(m.dataset.id); });
     popup.addEventListener("click", function (e) {
-      if (e.target.closest(".close")) { popup.classList.add("hidden"); $$(".marker", g).forEach(function (m) { m.classList.remove("active"); }); }
+      if (e.target.closest(".close")) {
+        popup.classList.add("hidden");
+        Object.keys(markers).forEach(function (k) { markers[k].setStyle({ radius: 9, weight: 2 }); });
+      }
     });
     window.MS_showOnMap = show;
   }

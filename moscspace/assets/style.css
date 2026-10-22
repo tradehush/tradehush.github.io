@@ -310,4 +310,4 @@ p { margin: 0 0 1em; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120px); background: #111; color: #fff; padding: 14px 22px; border-radius: 10px; font-size: 14px; z-index: 100; transition: transform .25s; max-width: calc(100% - 32px); }
 .toast.show { transform: translateX(-50%) translateY(0); }
-.bg-moscow { --hero-bg: url("hero-moscow.jpg") center / cover no-repeat, #1d2140; }
+.bg-moscow { --hero-bg: url("moscow-city.jpg") center 62% / cover no-repeat, #1d2140; }

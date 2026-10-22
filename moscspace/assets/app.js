@@ -405,34 +405,105 @@
   function initSearch() {
     var form = $("#search-form");
     if (!form) return;
-    var metroSel = form.metro, metros = {};
-    LISTINGS.forEach(function (l) { metros[l.metro] = 1; });
-    Object.keys(metros).sort().forEach(function (m) { metroSel.insertAdjacentHTML("beforeend", "<option>" + m + "</option>"); });
     if (user()) unlockAdvanced();
     function num(el) { var v = parseFloat(String(el.value).replace(/\s/g, "")); return isNaN(v) ? null : v; }
-    function run(scroll) {
+    function fmt(n) { return n.toLocaleString("ru-RU"); }
+
+    // Каждый фильтр — отдельная проверка. Варианты в любом фильтре считаются по объектам,
+    // которые проходят все ОСТАЛЬНЫЕ фильтры: выбрали «Офис» — в списке метро только станции с офисами.
+    function current() {
       var f = {
         type: form.type.value, price: num(form.price), areaMin: num(form.areaMin), areaMax: num(form.areaMax),
         metro: form.metro.value, district: form.district.value, metroMin: num(form.metroMin), highway: num(form.highway)
       };
-      var adv = user();
-      if (adv) { f.power = num(form.power); f.ceiling = num(form.ceiling); f.water = num(form.water); f.vent = form.vent.checked; f.heat = form.heat.checked; }
-      var res = LISTINGS.filter(function (l) {
-        return (!f.type || l.type === f.type) && (f.price == null || l.price <= f.price) &&
-          (f.areaMin == null || l.area >= f.areaMin) && (f.areaMax == null || l.area <= f.areaMax) &&
-          (!f.metro || l.metro === f.metro) && (!f.district || l.district === f.district) &&
-          (f.metroMin == null || l.metroMin <= f.metroMin) && (f.highway == null || l.highwayKm <= f.highway) &&
-          (!adv || ((f.power == null || l.power >= f.power) && (f.ceiling == null || l.ceiling >= f.ceiling) &&
-            (f.water == null || l.water >= f.water) && (!f.vent || l.vent) && (!f.heat || l.heat)));
+      if (user()) { f.power = num(form.power); f.ceiling = num(form.ceiling); f.water = num(form.water); f.vent = form.vent.checked; f.heat = form.heat.checked; }
+      return f;
+    }
+    var CHECKS = {
+      type: function (l, f) { return !f.type || l.type === f.type; },
+      price: function (l, f) { return f.price == null || l.price <= f.price; },
+      area: function (l, f) { return (f.areaMin == null || l.area >= f.areaMin) && (f.areaMax == null || l.area <= f.areaMax); },
+      metro: function (l, f) { return !f.metro || l.metro === f.metro; },
+      district: function (l, f) { return !f.district || l.district === f.district; },
+      metroMin: function (l, f) { return f.metroMin == null || l.metroMin <= f.metroMin; },
+      highway: function (l, f) { return f.highway == null || l.highwayKm <= f.highway; },
+      power: function (l, f) { return f.power == null || l.power >= f.power; },
+      ceiling: function (l, f) { return f.ceiling == null || l.ceiling >= f.ceiling; },
+      water: function (l, f) { return f.water == null || l.water >= f.water; },
+      vent: function (l, f) { return !f.vent || l.vent; },
+      heat: function (l, f) { return !f.heat || l.heat; }
+    };
+    function matching(f, except) {
+      return LISTINGS.filter(function (l) {
+        for (var k in CHECKS) if (k !== except && !CHECKS[k](l, f)) return false;
+        return true;
       });
+    }
+
+    // выпадающие списки: только значения, которые есть среди подходящих объектов, с количеством
+    function fillSelect(sel, anyLabel, values, counts) {
+      var cur = sel.value, html = "<option value=''>" + anyLabel + "</option>";
+      values.forEach(function (v) {
+        var n = counts[v.value] || 0;
+        if (!n && v.value !== cur) return;
+        html += "<option value='" + esc(v.value) + "'>" + esc(v.label) + " (" + n + ")</option>";
+      });
+      sel.innerHTML = html;
+      sel.value = cur;
+    }
+    function countBy(list, key) {
+      var c = {};
+      list.forEach(function (l) { c[l[key]] = (c[l[key]] || 0) + 1; });
+      return c;
+    }
+    var allMetros = Object.keys(countBy(LISTINGS, "metro")).sort(function (a, b) { return a.localeCompare(b, "ru"); });
+
+    // числовые поля: в подсказке — диапазон, который реально есть среди подходящих объектов
+    function range(list, key) {
+      if (!list.length) return null;
+      var vals = list.map(function (l) { return l[key]; });
+      return [Math.min.apply(null, vals), Math.max.apply(null, vals)];
+    }
+    function hint(el, r, unit) {
+      el.placeholder = r ? (r[0] === r[1] ? fmt(r[0]) : fmt(r[0]) + " – " + fmt(r[1])) + (unit ? " " + unit : "") : "нет вариантов";
+    }
+
+    function updateFilters(f) {
+      fillSelect(form.type, "Любой", Object.keys(TYPES).map(function (k) { return { value: k, label: TYPES[k] }; }), countBy(matching(f, "type"), "type"));
+      fillSelect(form.metro, "Любая", allMetros.map(function (m) { return { value: m, label: m }; }), countBy(matching(f, "metro"), "metro"));
+      fillSelect(form.district, "Любой", DISTRICTS.map(function (d) { return { value: d, label: d }; }), countBy(matching(f, "district"), "district"));
+      hint(form.price, range(matching(f, "price"), "price"), "₽");
+      var ar = range(matching(f, "area"), "area");
+      hint(form.areaMin, ar, "м²"); hint(form.areaMax, ar, "м²");
+      hint(form.metroMin, range(matching(f, "metroMin"), "metroMin"), "мин");
+      hint(form.highway, range(matching(f, "highway"), "highwayKm"), "км");
+      hint(form.power, range(matching(f, "power"), "power"), "кВт");
+      hint(form.ceiling, range(matching(f, "ceiling"), "ceiling"), "м");
+      hint(form.water, range(matching(f, "water"), "water"), "");
+      [["vent", "vent"], ["heat", "heat"]].forEach(function (p) {
+        var el = form[p[0]], any = matching(f, p[0]).some(function (l) { return l[p[1]]; });
+        el.disabled = !any && !el.checked;
+        el.parentElement.style.opacity = el.disabled ? ".4" : "";
+      });
+    }
+
+    function run(scroll) {
+      var f = current(), res = matching(f, null);
+      updateFilters(f);
       $("#results-count").textContent = "Найдено объектов: " + res.length;
       $("#results").innerHTML = res.length ? res.map(listingCard).join("") : "<div class='empty' style='grid-column:1/-1'>Ничего не найдено — попробуйте смягчить условия.</div>";
       if (scroll) $("#results-count").scrollIntoView({ behavior: "smooth", block: "start" });
     }
     form.addEventListener("submit", function (e) { e.preventDefault(); run(true); });
+    form.addEventListener("change", function () { run(false); });
+    var typing;
+    form.addEventListener("input", function (e) {
+      if (e.target.type !== "number") return;
+      clearTimeout(typing); typing = setTimeout(function () { run(false); }, 350);
+    });
     form.addEventListener("reset", function () { setTimeout(function () { run(false); }, 0); });
     var t = param("type");
-    if (t && TYPES[t]) form.type.value = t;
+    if (t && TYPES[t]) { updateFilters(current()); form.type.value = t; }
     run(false);
   }
 

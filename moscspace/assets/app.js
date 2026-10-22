@@ -226,6 +226,20 @@
       unlockAdvanced();
     },
 
+    // заявка на ипотеку
+    mortgage: function (form) {
+      var c = window.MS_mortgage || {};
+      addBooking({ kind: "Заявка на ипотеку", title: c.price ? "квартира за " + money(c.price) : "консультация", note: c.payment ? "кредит " + money(c.loan) + " на " + c.years + " лет под " + c.rate + "%, платёж ≈ " + money(c.payment) + "/мес" : "" });
+      showSuccess(form, "<h3>Заявка отправлена</h3><p>Менеджер позвонит по номеру +7 " + esc(form.phone.value) + " и расскажет, какие банки готовы одобрить ипотеку." + (c.payment ? "<br>Ваш расчёт: платёж ≈ <b>" + money(c.payment) + "</b> в месяц." : "") + "</p>");
+    },
+
+    // заявка на трейд-ин
+    tradein: function (form) {
+      var c = window.MS_tradein || {};
+      addBooking({ kind: "Заявка на трейд-ин", title: c.rooms + ", " + c.area + " м², " + c.district, note: "предварительная оценка " + money(c.value) + ", новая квартира " + money(c.target) });
+      showSuccess(form, "<h3>Заявка принята</h3><p>Оценщик свяжется с вами по номеру +7 " + esc(form.phone.value) + " и договорится о выезде.<br>Предварительная оценка вашей квартиры: <b>" + money(c.value) + "</b>.</p>");
+    },
+
     // бронирование зала
     hall: function (form) {
       var slot = $(".slot.picked", form);
@@ -380,9 +394,9 @@
     var list = store.get("bookings", []);
     $("#acc-bookings").innerHTML = list.length ? list.map(function (b) {
       return "<div class='card soft' style='margin-bottom:12px'><b>" + esc(b.kind) + ":</b> " + esc(b.title) + "<div class='small muted'>" +
-        (b.date ? new Date(b.date).toLocaleDateString("ru-RU") + ", " + esc(b.time) : "срок " + b.months + " мес., первый платёж " + money(b.sum.first)) +
+        (b.note != null ? esc(b.note) : b.date ? new Date(b.date).toLocaleDateString("ru-RU") + ", " + esc(b.time) : "срок " + b.months + " мес., первый платёж " + money(b.sum.first)) +
         " · оформлено " + new Date(b.created).toLocaleDateString("ru-RU") + "</div></div>";
-    }).join("") : "<p class='muted'>Бронирований пока нет. <a href='offers.html'>Посмотреть спецпредложения</a></p>";
+    }).join("") : "<p class='muted'>Бронирований и заявок пока нет. <a href='offers.html'>Посмотреть спецпредложения</a></p>";
     $("#logout").addEventListener("click", function () {
       store.del("user"); store.del("plan"); store.del("bookings"); store.del("contact");
       location.href = "index.html";
@@ -505,6 +519,76 @@
     var t = param("type");
     if (t && TYPES[t]) { updateFilters(current()); form.type.value = t; }
     run(false);
+  }
+
+  // ---------- ипотечный калькулятор ----------
+  function annuity(loan, ratePct, years) {
+    var n = years * 12, r = ratePct / 100 / 12;
+    return r ? loan * r / (1 - Math.pow(1 + r, -n)) : loan / n;
+  }
+  function initMortgage() {
+    var form = $("#mortgage-calc");
+    if (!form) return;
+    var p = +param("price"), d = param("down");
+    if (p > 0) form.price.value = Math.round(p);
+    if (d != null && +d >= 0) form.down.value = Math.round(+d);
+    function calc() {
+      var price = +form.price.value, down = +form.down.value, years = +form.years.value, rate = +form.rate.value;
+      $("#m-years-val").textContent = years;
+      var err = "";
+      if (!(price > 0)) err = "Укажите стоимость квартиры";
+      else if (down < 0 || down >= price) err = "Первоначальный взнос должен быть меньше стоимости квартиры";
+      else if (!(rate > 0)) err = "Укажите ставку";
+      $("#m-error").textContent = err;
+      $("#m-down-pct").textContent = price > 0 ? Math.round(down / price * 100) + "% от стоимости" + (down / price < 0.2 ? " — многие банки просят от 20%" : "") : "";
+      if (err) { ["#m-payment", "#m-loan", "#m-over", "#m-total", "#m-income"].forEach(function (id) { $(id).textContent = "—"; }); window.MS_mortgage = null; return; }
+      var loan = price - down, pay = Math.round(annuity(loan, rate, years)), total = pay * years * 12;
+      $("#m-payment").textContent = money(pay);
+      $("#m-loan").textContent = money(loan);
+      $("#m-over").textContent = money(total - loan);
+      $("#m-total").textContent = money(total);
+      $("#m-income").textContent = "от " + money(Math.ceil(pay * 2 / 1000) * 1000) + " в месяц";
+      window.MS_mortgage = { price: price, loan: loan, years: years, rate: rate, payment: pay };
+    }
+    form.addEventListener("input", calc);
+    form.addEventListener("submit", function (e) { e.preventDefault(); });
+    $("#m-programs").addEventListener("click", function (e) {
+      var b = e.target.closest(".chip");
+      if (!b) return;
+      $$(".chip", this).forEach(function (x) { x.classList.toggle("active", x === b); });
+      form.rate.value = b.dataset.rate;
+      calc();
+    });
+    form.rate.addEventListener("input", function () { $$("#m-programs .chip").forEach(function (x) { x.classList.toggle("active", x.dataset.rate === form.rate.value); }); });
+    calc();
+  }
+
+  // ---------- трейд-ин ----------
+  // примерные средние цены за м² вторичного жилья по округам (для демонстрации)
+  var M2 = { "ЦАО": 600000, "ЗАО": 380000, "ЮЗАО": 370000, "СЗАО": 340000, "САО": 340000, "СВАО": 310000, "ЮАО": 300000, "ВАО": 290000, "ЮВАО": 270000, "НАО": 220000 };
+  var ROOMS = ["Студия", "1-комнатная", "2-комнатная", "3-комнатная", "4+ комнатная"];
+  function initTradein() {
+    var form = $("#tradein-calc");
+    if (!form) return;
+    function calc() {
+      var area = +form.area.value, target = +form.target.value;
+      var m2 = Math.round(M2[form.district.value] * +form.cond.value * +form.age.value / 1000) * 1000;
+      var value = area > 0 ? Math.round(m2 * area / 10000) * 10000 : 0;
+      var diff = target - value;
+      $("#t-m2").textContent = money(m2);
+      $("#t-value").textContent = value ? money(value) : "—";
+      $("#t-new").textContent = target > 0 ? money(target) : "—";
+      $("#t-diff-label").textContent = diff >= 0 ? "Доплата" : "Вы получите разницу";
+      $("#t-diff").textContent = target > 0 && value ? money(Math.abs(diff)) : "—";
+      var link = $("#t-mortgage");
+      link.classList.toggle("hidden", !(diff > 0 && value));
+      link.href = "mortgage.html?price=" + target + "&down=" + value + "#calc";
+      window.MS_tradein = { district: form.district.value, rooms: ROOMS[+form.rooms.value], area: area, value: value, target: target };
+    }
+    form.addEventListener("input", calc);
+    form.addEventListener("change", calc);
+    form.addEventListener("submit", function (e) { e.preventDefault(); });
+    calc();
   }
 
   // ---------- карта ----------
@@ -694,6 +778,8 @@
     initPlans();
     initAccount();
     initSearch();
+    initMortgage();
+    initTradein();
     initMap();
     initAssistant();
     initSliders();

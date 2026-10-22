@@ -349,3 +349,19 @@ p { margin: 0 0 1em; }
 }
 .map-note { position: absolute; left: 60px; right: 16px; top: 120px; z-index: 550; background: #fff8d6; color: #111; font-size: 13px; padding: 10px 14px; border-radius: 8px; }
 @media (max-width: 900px) { .map-note { top: 70px; } }
+
+/* калькуляторы: ипотека и трейд-ин */
+.calc { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; margin-top: 32px; align-items: start; }
+@media (max-width: 860px) { .calc { grid-template-columns: 1fr; } }
+.calc-form { background: #fff; border-radius: var(--radius); padding: 26px; display: grid; gap: 16px; min-width: 0; }
+.calc-form h3 { margin: 0; }
+.calc-form input[type=range] { width: 100%; accent-color: #111; }
+.calc-result { border-radius: var(--radius); padding: 28px; position: sticky; top: 140px; }
+.calc-big { font-size: clamp(32px, 4vw, 44px); font-weight: 700; margin: 4px 0 18px; font-variant-numeric: tabular-nums; }
+.calc-kv { grid-template-columns: 1fr auto; margin-bottom: 20px; font-variant-numeric: tabular-nums; }
+.calc-kv dd { text-align: right; font-weight: 600; }
+.chip.active { background: #111; color: #fff; border-color: #111; }
+.num-badge { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #111; display: grid; place-items: center; margin-bottom: 12px; }
+section[id] { scroll-margin-top: 130px; }
+@media (max-width: 960px) { section[id] { scroll-margin-top: 20px; } }
+@media (max-width: 860px) { .calc-result { position: static; } }

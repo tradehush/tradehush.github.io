@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ипотека — MoscSpace</title>
+<meta name="description" content="Аренда помещений в Москве — MoscSpace">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="logo" href="index.html">MoscSpace</a>
+    <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <div class="header-contacts">
+      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div class="addr"><b>Тверская, 21</b><br>Москва</div>
+      <a class="account-link" href="register.html">Войти</a>
+    </div>
+  </div>
+</header>
+<main>
+<section class="hero bg-moscow">
+  <div class="wrap">
+    <h1>Ипотека на квартиру в Москве</h1>
+    <p>Посчитайте ежемесячный платёж онлайн и оставьте заявку: подберём программу и банк, поможем собрать документы и выйти на сделку.</p>
+    <div class="btn-row"><a class="btn" href="#calc">Рассчитать платёж</a><a class="btn outline" href="tradein.html">Трейд-ин вашей квартиры</a></div>
+  </div>
+</section>
+
+<section class="section light" id="calc">
+  <div class="wrap">
+    <h2 class="center">Ипотечный калькулятор</h2>
+    <p class="center muted">Расчёт примерный: точную ставку и условия назовёт банк после рассмотрения заявки.</p>
+    <div class="calc">
+      <form class="calc-form" id="mortgage-calc">
+        <div class="field"><label for="m-price">Стоимость квартиры, ₽</label><input class="input" id="m-price" name="price" type="number" min="500000" step="100000" value="15000000"></div>
+        <div class="field"><label for="m-down">Первоначальный взнос, ₽</label><input class="input" id="m-down" name="down" type="number" min="0" step="100000" value="3000000"><div class="small muted" id="m-down-pct"></div></div>
+        <div class="field"><label for="m-years">Срок, лет: <b id="m-years-val">20</b></label><input id="m-years" name="years" type="range" min="1" max="30" value="20"></div>
+        <div class="field"><label for="m-rate">Ставка, % годовых</label><input class="input" id="m-rate" name="rate" type="number" min="0.1" max="40" step="0.1" value="6"></div>
+        <div class="field"><label>Программа</label>
+          <div class="chips" id="m-programs">
+            <button class="chip active" type="button" data-rate="6">Семейная</button>
+            <button class="chip" type="button" data-rate="6">IT-ипотека</button>
+            <button class="chip" type="button" data-rate="2">Дальневосточная</button>
+            <button class="chip" type="button" data-rate="20">Рыночная</button>
+          </div>
+          <div class="small muted">Ставки по программам указаны для примера — их можно поменять вручную.</div>
+        </div>
+      </form>
+      <div class="calc-result dark">
+        <div class="small muted">Ежемесячный платёж</div>
+        <div class="calc-big" id="m-payment">—</div>
+        <dl class="kv calc-kv">
+          <dt>Сумма кредита</dt><dd id="m-loan">—</dd>
+          <dt>Переплата по процентам</dt><dd id="m-over">—</dd>
+          <dt>Общая выплата</dt><dd id="m-total">—</dd>
+          <dt>Рекомендуемый доход</dt><dd id="m-income">—</dd>
+        </dl>
+        <p class="error-text" id="m-error"></p>
+        <a class="btn full" href="#apply">Оставить заявку</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap narrow">
+    <h2 class="center">Как проходит сделка</h2>
+    <div class="numbered">
+      <div class="item"><span class="num">1</span><div><h3>Заявка и расчёт</h3><p class="muted small">Считаем платёж, подбираем программу и банки с лучшими условиями под ваш доход.</p></div></div>
+      <div class="item"><span class="num">2</span><div><h3>Одобрение</h3><p class="muted small">Подаём заявку сразу в несколько банков. Обычно решение приходит за 1–3 рабочих дня.</p></div></div>
+      <div class="item"><span class="num">3</span><div><h3>Выбор квартиры и проверка</h3><p class="muted small">Проверяем юридическую чистоту объекта и готовим документы для банка и оценки.</p></div></div>
+      <div class="item"><span class="num">4</span><div><h3>Сделка и регистрация</h3><p class="muted small">Подписываем договор, проводим безопасные расчёты и регистрируем право собственности в Росреестре.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section dark" id="apply">
+  <div class="wrap center">
+    <h2>Заявка на ипотеку</h2>
+    <p class="lead">Оставьте контакты — менеджер перезвонит, уточнит детали и отправит заявку в банки. Параметры из калькулятора прикрепятся к заявке.</p>
+    <form class="form" data-form="mortgage">
+      <div class="field"><input class="input" name="name" type="text" placeholder="Ваше имя" data-v="name" autocomplete="name" data-fill="name"><div class="error-text"></div></div>
+      <div class="field"><div class="phone-wrap"><span class="cc">🇷🇺 +7</span><input class="input" name="phone" type="tel" inputmode="tel" placeholder="(000) 000-00-00" data-v="phone" data-mask="phone" autocomplete="tel-national"></div><div class="error-text"></div></div>
+      <div class="field"><input class="input" name="email" type="email" placeholder="Электронная почта" data-v="email" autocomplete="email" data-fill="email"><div class="error-text"></div></div>
+      <label class="consent"><input type="checkbox" name="agree" data-v="consent" checked> <span>Согласен с <a href="privacy.html">политикой конфиденциальности</a> и обработкой персональных данных</span></label>
+      <button class="btn black full" type="submit">Отправить заявку</button>
+    </form>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
+      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+    </div>
+    <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
+  </div>
+</footer>
+</body>
+</html>

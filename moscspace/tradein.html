@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Трейд-ин — MoscSpace</title>
+<meta name="description" content="Аренда помещений в Москве — MoscSpace">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="logo" href="index.html">MoscSpace</a>
+    <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <div class="header-contacts">
+      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div class="addr"><b>Тверская, 21</b><br>Москва</div>
+      <a class="account-link" href="register.html">Войти</a>
+    </div>
+  </div>
+</header>
+<main>
+<section class="hero bg-glass">
+  <div class="wrap">
+    <h1>Трейд-ин: обмен квартиры на новую</h1>
+    <p>Зачтём вашу текущую квартиру в стоимость новой. Не нужно самим искать покупателя и снимать жильё на время продажи — переезжаете один раз.</p>
+    <div class="btn-row"><a class="btn" href="#estimate">Оценить мою квартиру</a><a class="btn outline" href="mortgage.html">Доплата в ипотеку</a></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2 class="center">Как работает трейд-ин</h2>
+    <div class="grid c4" style="margin-top:30px">
+      <div class="card soft"><span class="num-badge">1</span><h3>Оценка</h3><p class="small muted">Онлайн-расчёт ниже, затем выезд специалиста и точная оценка за 1–2 дня.</p></div>
+      <div class="card soft"><span class="num-badge">2</span><h3>Выбор новой квартиры</h3><p class="small muted">Подбираем вариант под ваш бюджет и фиксируем цену на время сделки.</p></div>
+      <div class="card soft"><span class="num-badge">3</span><h3>Договор</h3><p class="small muted">Стоимость старой квартиры засчитывается, разницу можно оплатить сразу или в ипотеку.</p></div>
+      <div class="card soft"><span class="num-badge">4</span><h3>Переезд</h3><p class="small muted">Живёте в старой квартире, пока не будет готова новая, — без аренды и двойных переездов.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section light" id="estimate">
+  <div class="wrap">
+    <h2 class="center">Онлайн-оценка и расчёт доплаты</h2>
+    <p class="center muted">Оценка предварительная, по средним ценам за м² в округе. Точную сумму назовёт специалист после осмотра.</p>
+    <div class="calc">
+      <form class="calc-form" id="tradein-calc">
+        <h3>Ваша квартира</h3>
+        <div class="field"><label for="t-district">Округ</label><select class="input" id="t-district" name="district">
+          <option value="ЦАО">ЦАО</option><option value="САО">САО</option><option value="СВАО">СВАО</option><option value="ВАО" selected>ВАО</option><option value="ЮВАО">ЮВАО</option><option value="ЮАО">ЮАО</option><option value="ЮЗАО">ЮЗАО</option><option value="ЗАО">ЗАО</option><option value="СЗАО">СЗАО</option><option value="НАО">Новая Москва</option>
+        </select></div>
+        <div class="grid c2" style="gap:14px">
+          <div class="field"><label for="t-rooms">Комнат</label><select class="input" id="t-rooms" name="rooms"><option value="0">Студия</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4+</option></select></div>
+          <div class="field"><label for="t-area">Площадь, м²</label><input class="input" id="t-area" name="area" type="number" min="10" max="500" value="54"></div>
+        </div>
+        <div class="field"><label for="t-cond">Состояние</label><select class="input" id="t-cond" name="cond"><option value="0.9">Требует ремонта</option><option value="1" selected>Обычный ремонт</option><option value="1.1">Хороший ремонт</option></select></div>
+        <div class="field"><label for="t-age">Дом</label><select class="input" id="t-age" name="age"><option value="0.9">Старый фонд / хрущёвка</option><option value="1" selected>Панельный или кирпичный 1980–2010</option><option value="1.1">Новостройка после 2010</option></select></div>
+        <h3 style="margin-top:10px">Новая квартира</h3>
+        <div class="field"><label for="t-target">Желаемая стоимость новой квартиры, ₽</label><input class="input" id="t-target" name="target" type="number" min="1000000" step="100000" value="22000000"></div>
+      </form>
+      <div class="calc-result dark">
+        <div class="small muted">Предварительная оценка вашей квартиры</div>
+        <div class="calc-big" id="t-value">—</div>
+        <dl class="kv calc-kv">
+          <dt>Цена за м²</dt><dd id="t-m2">—</dd>
+          <dt>Новая квартира</dt><dd id="t-new">—</dd>
+          <dt id="t-diff-label">Доплата</dt><dd id="t-diff">—</dd>
+        </dl>
+        <a class="btn full" id="t-mortgage" href="mortgage.html">Рассчитать доплату в ипотеку</a>
+        <a class="btn outline full" style="margin-top:10px" href="#apply">Оставить заявку на трейд-ин</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section dark" id="apply">
+  <div class="wrap center">
+    <h2>Заявка на трейд-ин</h2>
+    <p class="lead">Оставьте контакты — договоримся о выезде оценщика. Данные из расчёта прикрепятся к заявке.</p>
+    <form class="form" data-form="tradein">
+      <div class="field"><input class="input" name="name" type="text" placeholder="Ваше имя" data-v="name" autocomplete="name" data-fill="name"><div class="error-text"></div></div>
+      <div class="field"><div class="phone-wrap"><span class="cc">🇷🇺 +7</span><input class="input" name="phone" type="tel" inputmode="tel" placeholder="(000) 000-00-00" data-v="phone" data-mask="phone" autocomplete="tel-national"></div><div class="error-text"></div></div>
+      <div class="field"><input class="input" name="email" type="email" placeholder="Электронная почта" data-v="email" autocomplete="email" data-fill="email"><div class="error-text"></div></div>
+      <label class="consent"><input type="checkbox" name="agree" data-v="consent" checked> <span>Согласен с <a href="privacy.html">политикой конфиденциальности</a> и обработкой персональных данных</span></label>
+      <button class="btn black full" type="submit">Записаться на оценку</button>
+    </form>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
+      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+    </div>
+    <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
+  </div>
+</footer>
+</body>
+</html>

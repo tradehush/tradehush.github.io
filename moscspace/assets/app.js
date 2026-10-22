@@ -56,7 +56,31 @@
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function money(n) { return n.toLocaleString("ru-RU") + " ₽"; }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function param(name) { return new URLSearchParams(location.search).get(name); }
+  // Однофайловая версия: все страницы лежат в <template data-page> внутри одного index.html,
+  // а адрес страницы хранится в хеше: #/booking?item=office-center или #/halls/book (book — якорь).
+  var SPA = !!document.querySelector("template[data-page]");
+  var route = { page: "index", anchor: "", query: "" };
+  function toHash(url) {
+    var m = String(url).match(/^([a-z-]+)\.html(\?[^#]*)?(?:#(.*))?$/);
+    return m ? "#/" + m[1] + (m[3] ? "/" + m[3] : "") + (m[2] || "") : null;
+  }
+  function parseHash() {
+    var h = location.hash.slice(1);
+    if (h.indexOf("/") !== 0) return { page: "index", anchor: h, query: "" };
+    h = h.slice(1);
+    var q = "", qi = h.indexOf("?");
+    if (qi >= 0) { q = h.slice(qi); h = h.slice(0, qi); }
+    var parts = h.split("/");
+    return { page: parts[0] || "index", anchor: parts[1] || "", query: q };
+  }
+  function go(url, replace) {
+    if (!SPA) { if (replace) location.replace(url); else location.href = url; return; }
+    var h = toHash(url) || "#/index";
+    if (h === location.hash) render();
+    else if (replace) location.replace(h);
+    else location.hash = h;
+  }
+  function param(name) { return new URLSearchParams(SPA ? route.query : location.search).get(name); }
   function norm(s) { return String(s).toLowerCase().replace(/ё/g, "е"); }
 
   var store = {
@@ -82,14 +106,19 @@
   }
 
   // ---------- шапка ----------
-  function initHeader() {
+  function initBurger() {
     var burger = $(".burger"), nav = $(".main-nav");
     if (burger && nav) burger.addEventListener("click", function () {
       nav.classList.toggle("open");
       burger.setAttribute("aria-expanded", nav.classList.contains("open"));
     });
-    var page = location.pathname.split("/").pop() || "index.html";
-    $$(".main-nav a").forEach(function (a) { if (a.getAttribute("href") === page) a.classList.add("active"); });
+  }
+  function initHeader() {
+    var page = SPA ? route.page : (location.pathname.split("/").pop() || "index.html").replace(/\.html$/, "");
+    $$(".main-nav a").forEach(function (a) {
+      var href = a.getAttribute("href"), target = SPA && href.indexOf("#/") === 0 ? href.slice(2).split(/[/?]/)[0] : href.replace(/\.html.*$/, "");
+      a.classList.toggle("active", target === page);
+    });
     var u = user(), acc = $(".account-link");
     if (acc && u) {
       var parts = u.name.split(" ");
@@ -220,7 +249,7 @@
       var u = { name: form.fio.value.trim(), email: form.email.value.trim(), phone: "+7 " + form.phone.value.trim(), since: new Date().toISOString() };
       store.set("user", u);
       var next = param("next");
-      if (next && /^[a-z-]+\.html(\?[\w=&-]*)?$/.test(next)) { location.href = next; return; }
+      if (next && /^[a-z-]+\.html(\?[\w=&-]*)?$/.test(next)) { go(next); return; }
       initHeader();
       showSuccess(form, "<h3>Готово, " + esc(u.name.split(" ")[1] || u.name) + "!</h3><p>Аккаунт создан. Теперь вам доступны расширенные фильтры поиска (мощность, высота потолков, коммуникации) и личный кабинет.</p><div class='btn-row' style='justify-content:center'><a class='btn black' href='index.html#search'>К поиску</a><a class='btn outline' href='account.html'>Личный кабинет</a></div>");
       unlockAdvanced();
@@ -339,7 +368,7 @@
     var box = $("#booking-item");
     if (!box) return;
     var item = currentItem();
-    if (item.unit === "час") { location.replace("halls.html#book"); return; }
+    if (item.unit === "час") { go("halls.html#book", true); return; }
     var term = $("#term");
     function upd() {
       var m = +term.value, s = bookingSum(item, m);
@@ -399,7 +428,7 @@
     }).join("") : "<p class='muted'>Бронирований и заявок пока нет. <a href='offers.html'>Посмотреть спецпредложения</a></p>";
     $("#logout").addEventListener("click", function () {
       store.del("user"); store.del("plan"); store.del("bookings"); store.del("contact");
-      location.href = "index.html";
+      go("index.html");
     });
   }
 
@@ -768,7 +797,7 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
+  function initPage() {
     initHeader();
     initMasks();
     initForms();
@@ -784,5 +813,42 @@
     initAssistant();
     initSliders();
     initAccordions();
+  }
+
+  // показать страницу из шаблона (однофайловая версия)
+  function render() {
+    route = parseHash();
+    var tpl = $("template[data-page='" + route.page + "']") || $("template[data-page='index']");
+    if (tpl.dataset.page !== route.page) route = { page: "index", anchor: route.anchor, query: route.query };
+    var main = $("main");
+    main.innerHTML = "";
+    main.appendChild(tpl.content.cloneNode(true));
+    document.title = tpl.dataset.title;
+    var nav = $(".main-nav");
+    if (nav) nav.classList.remove("open");
+    initPage();
+    var t = route.anchor && document.getElementById(route.anchor);
+    if (t) t.scrollIntoView(); else window.scrollTo(0, 0);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    initBurger();
+    if (!SPA) { initPage(); return; }
+    // ссылки вида page.html и #якорь работают внутри одного файла
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest("a[href]");
+      if (!a || a.target === "_blank") return;
+      var href = a.getAttribute("href");
+      if (href.charAt(0) === "#" && href.indexOf("#/") !== 0) {
+        var el = href.length > 1 && document.getElementById(href.slice(1));
+        e.preventDefault();
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      var h = toHash(href);
+      if (h) { e.preventDefault(); go(href); }
+    });
+    window.addEventListener("hashchange", render);
+    render();
   });
 })();

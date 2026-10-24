@@ -5,7 +5,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
   font: 15px/1.5 Georgia, "Times New Roman", serif; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 canvas { display: block; touch-action: none; }
-#c { position: fixed; inset: 0; }
+#c { position: fixed; inset: 0; filter: saturate(0.72) contrast(1.12) brightness(1.04) sepia(0.12); }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 .touch-only { display: none; }
 @media (pointer: coarse) and (orientation: portrait) { .touch-only { display: inline; } }
@@ -129,3 +129,10 @@ kbd { font: 12px ui-monospace, monospace; background: #222; border: 1px solid #4
   .tbar.side { width: 214px; gap: 14px 6px; }
   .tbar.top { gap: 6px; }
 }
+
+.tbar.place { display: none; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); gap: 14px; align-items: flex-end; }
+#touch.placing #t-reload, #touch.placing #t-heal, #touch.placing #t-run, #touch.placing #t-eat, #touch.placing #t-swap { display: none; }
+#touch.placing .tbar.place { display: flex; }
+#touch.driving #t-atk, #touch.driving #t-swap, #touch.driving #t-reload, #touch.driving #t-heal, #touch.driving #t-run, #touch.driving #t-eat, #touch.driving #t-build { display: none; }
+#touch.nolabels .tb i { display: none; }
+.tb.hint { border-color: #ffe080; box-shadow: 0 0 0 4px rgba(255,224,128,.35); animation: ready .8s ease-in-out infinite; }

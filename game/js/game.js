@@ -1,7 +1,7 @@
 "use strict";
 // Game state and simulation.
 
-const SAVE_KEY = "blackpine.save.v2";
+const SAVE_KEY = "blackpine.save.v3";
 const FLASH_RANGE = 440, FLASH_HALF = 0.5, FLASH_RAYS = 72, HALO_R = 85;
 
 const G = {
@@ -15,15 +15,15 @@ const G = {
 };
 
 function newPlayer() {
-  return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, pitch: 0, hp: 100, sta: 100, san: 100, bat: 100, light: true,
+  return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, pitch: 0, hp: 100, sta: 100, san: 100, bat: 100, food: 100, light: true, isPlayer: true,
     atkCd: 0, reloadT: 0, iframe: 0, staLock: 0, stepT: 0, act: null, actProg: 0, actTick: 0, moving: false };
 }
 
 // one-time hints; shown in their own box so they do not get lost among pickups
-function tip(key, text) {
+function tip(key, text, icon) {
   if (G.tips.includes(key)) return;
   G.tips.push(key);
-  G.tip = { text, t: 8 };
+  G.tip = { text, t: 9, icon: icon || "💡" };
 }
 const K = (touch, key) => Input.touch ? touch : key;
 
@@ -68,6 +68,7 @@ function newGame() {
     boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 20, figT: 70,
     storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
+  Object.assign(G, { car: makeCar(), base: null, builds: [], place: null, fishing: null, drive: false, lastStep: 0, objBanner: null, lastRegion: null });
 }
 
 // what changes on a map (resources, crates, fires, traps) is kept per map while you are elsewhere
@@ -75,14 +76,16 @@ function snapMap() {
   const res = [];
   World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
   return { res, it: World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0)), hz: World.hazards.map(h => h.armed === false ? 1 : 0),
-    fires: G.fires, traps: G.traps, day: G.day };
+    fires: G.fires, traps: G.traps, day: G.day, builds: G.builds.map(b => ({ k: b.k, x: b.x, y: b.y, rot: b.rot, hp: b.hp, ammo: b.ammo, plant: b.plant, grow: b.grow })) };
 }
 function applyMap(m) {
-  if (!m) return;
+  if (!m) { G.builds = []; return; }
   for (const [i, left, regrow] of m.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; if (left <= 0 && World.res[i].type !== "tree" && World.res[i].type !== "bush") World.res[i].block = false; }
   (m.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
   (m.hz || []).forEach((f, i) => { if (f && World.hazards[i]) World.hazards[i].armed = false; });
   G.fires = m.fires || []; G.traps = m.traps || [];
+  G.builds = (m.builds || []).map(b => Object.assign({}, b));
+  registerBuilds();
   // days passed while away: things regrow and some crates fill up
   for (let d = (m.day || G.day); d < G.day; d++) {
     for (const o of World.res) if (o.regrow && o.regrow <= G.day) { o.left = o.max; o.regrow = 0; o.block = o.type !== "bush"; }
@@ -95,9 +98,9 @@ function save() {
   try {
     const p = G.p;
     G.maps[World.map] = snapMap();
-    const data = { v: 2, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered,
-      p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, light: p.light } };
+    const data = { v: 3, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive,
+      p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, food: p.food, light: p.light } };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
   } catch (e) { return false; }
@@ -108,12 +111,12 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function load() {
   let d;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch (e) { d = null; }
-  if (!d || d.v !== 2) return false;
+  if (!d || d.v !== 3) return false;
   newGame();
   G.seed = d.seed;
   generateWorld(d.seed, d.map || "forest");
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {} });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map });
   applyMap(G.maps[World.map]);
   Object.assign(G.p, d.p);
   G.p.light = true;
@@ -129,7 +132,7 @@ function travel(to) {
   G.state = "travel";
   UI.fade(() => {
     generateWorld(G.seed, to);
-    Object.assign(G, { mons: [], projs: [], drops: [], decals: [], roots: [], tracers: [], parts: [], watchers: [], figure: null, boss: G.bossDead ? null : G.boss, fires: [], traps: [] });
+    Object.assign(G, { mons: [], projs: [], drops: [], decals: [], roots: [], tracers: [], parts: [], watchers: [], figure: null, boss: G.bossDead ? null : G.boss, fires: [], traps: [], builds: [], place: null, fishing: null });
     if (G.boss && !G.bossDead) G.boss = null;
     applyMap(G.maps[to]);
     const back = World.exits.find(e => e.to === from) || World.exits[0];
@@ -303,12 +306,14 @@ function freeSpot(cx, cy, minD, maxD, allowHouse = false, avoidLight = true) {
   for (let i = 0; i < 40; i++) {
     const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
     const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-    if (x < 40 || y < 40 || x > WORLD_W - 40 || y > WORLD_H - 40) continue;
+    if (x < 40 || y < 40 || x > World.W - 40 || y > World.H - 40) continue;
     const ci = Math.floor(y / World.ncell) * World.nw + Math.floor(x / World.ncell);
     if (World.nav[ci]) continue;
     if (!allowHouse && insideHouse(x, y, 30)) continue;
     if (avoidLight) {
       let bad = false;
+      if (G.night < 0.5 && inBase(x, y)) bad = true;
+      for (const b of G.builds) if (b.k === "light" && dist2(x, y, b.x, b.y) < 600 * 600) bad = true;
       for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 420 * 420) bad = true;
       for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r + 260) ** 2) bad = true;
       if (bad) continue;
@@ -321,7 +326,8 @@ function freeSpot(cx, cy, minD, maxD, allowHouse = false, avoidLight = true) {
 
 function pickType() {
   const n = G.night > 0.5, d = G.day;
-  const custom = MAPS[World.map].spawn;
+  const reg = World.indoor ? null : regionAt(G.p.x, G.p.y);
+  const custom = (reg && reg.spawn) || MAPS[World.map].spawn;
   const w = custom ? Object.assign({}, custom) : n
     ? { crawler: 40, ghoul: 30, spitter: 12 + d * 2, stalker: d >= 2 ? 8 + d * 2 : 3, brute: d >= 2 ? 4 + d * 2 : 1 }
     : { crawler: 55, ghoul: 40, spitter: 10, brute: d >= 3 ? 4 : 0 };
@@ -336,9 +342,10 @@ function spawnTick(dt) {
   G.spawnT -= dt;
   if (G.spawnT > 0) return;
   const night = G.night > 0.5;
-  G.spawnT = World.indoor ? 7 : night ? Math.max(2.2, 4.2 - G.day * 0.3) : 11;
+  // day is quiet, night is not
+  G.spawnT = World.indoor ? 7 : night ? Math.max(2, 3.6 - G.day * 0.25) : 20;
   const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss").length;
-  const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 3;
+  const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 2;
   if (free >= cap) return;
   // the very first minutes are calm
   if (G.step < 1 && !night) return;
@@ -393,11 +400,13 @@ function isBeamLit(x, y, r) {
 }
 function fireLit(x, y) {
   for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 220 * 220) return true;
+  for (const b of G.builds) if ((b.k === "light" && dist2(x, y, b.x, b.y) < 300 * 300) || (b.k === "stove" && dist2(x, y, b.x, b.y) < 160 * 160)) return true;
   for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r * 0.75) ** 2) return true;
   return false;
 }
 function nearFire(x, y, r) {
   for (const f of G.fires) if (dist2(x, y, f.x, f.y) < r * r) return f;
+  for (const b of G.builds) if ((b.k === "stove" || b.k === "light") && dist2(x, y, b.x, b.y) < (b.k === "light" ? r * 1.4 : r) ** 2) return b;
   for (const l of World.lights) if (l.col.startsWith("255") && dist2(x, y, l.x, l.y) < r * r) return l;
   return null;
 }
@@ -405,6 +414,7 @@ function nearFire(x, y, r) {
 function hurt(dmg, src) {
   const p = G.p;
   if (p.iframe > 0 || G.state !== "play") return;
+  if (G.drive) { G.car.hp -= dmg * 0.6; dmg *= 0.35; }
   p.hp -= dmg; p.iframe = 0.45; p.san = Math.max(0, p.san - dmg * 0.25);
   G.shake = Math.max(G.shake, 8); G.hurtFlash = 0.5;
   Sound.hurt(); blood(p.x, p.y, 6);
@@ -517,8 +527,14 @@ function updateMonsters(dt) {
 
     m.kx *= Math.pow(0.02, dt); m.ky *= Math.pow(0.02, dt);
     const ox = m.x, oy = m.y;
+    if (m.slowT > 0) { m.slowT -= dt; spd *= 0.4; }
     m.x += (mvx * spd + m.kx) * dt; m.y += (mvy * spd + m.ky) * dt;
+    m.hitBuild = null;
     collide(m);
+    if (m.hitBuild && m.state === "chase" && !m.fake) {
+      m.bT = (m.bT || 0) - dt;
+      if (m.bT <= 0) { m.bT = def.acd; m.wind = 0.3; damageBuild(m.hitBuild.build, def.dmg * (m.type === "brute" ? 2 : 1)); }
+    }
     m.step += Math.hypot(m.x - ox, m.y - oy) * 0.08;
 
     // traps
@@ -676,8 +692,8 @@ function updateProjs(dt) {
 const GATHER = {
   tree:  { n: "Рубить дерево", time: () => 1.4 / bestTool("chop"), give: () => [["wood", 1 + (Math.random() < 0.35 ? 1 : 0)]], snd: "chop", regrow: 2 },
   rock:  { n: "Добывать камень", time: () => 1.3 / bestTool("mine"), give: () => [["stone", 1], ...(Math.random() < 0.2 ? [["scrap", 1]] : [])], snd: "mine", regrow: 3 },
-  bush:  { n: "Собрать травы", time: () => 0.9, give: () => [["herb", 1 + (Math.random() < 0.3 ? 1 : 0)]], snd: "step", regrow: 1 },
-  scrap: { n: "Разобрать металлолом", time: () => 1.5, give: () => [["scrap", 1], ...(Math.random() < 0.18 ? [["powder", 1]] : []), ...(Math.random() < 0.1 ? [["cloth", 1]] : [])], snd: "mine", regrow: 3 },
+  bush:  { n: "Собрать травы и ягоды", time: () => 0.9, give: () => [["herb", 1 + (Math.random() < 0.3 ? 1 : 0)], ...(Math.random() < 0.35 ? [["berries", 1]] : [])], snd: "step", regrow: 1 },
+  scrap: { n: "Разобрать металлолом", time: () => 1.5, give: (o) => [["scrap", 1], ...(Math.random() < 0.18 ? [["powder", 1]] : []), ...(Math.random() < 0.1 ? [["cloth", 1]] : []), ...(o && o.car && Math.random() < 0.3 ? [["parts", 1]] : []), ...(o && o.car && Math.random() < 0.08 ? [["fuel", 1]] : [])], snd: "mine", regrow: 3 },
 };
 
 function findInteract() {
@@ -695,12 +711,18 @@ function findInteract() {
     const d = Math.hypot(o.x - fx, o.y - fy) - o.r;
     if (d < 30 && d < bd) { bd = d; best = o; }
   }
+  if (carHere()) { const d = Math.hypot(G.car.x - fx, G.car.y - fy) - CAR_R; if (d < 40 && d < bd) { bd = d; best = { type: "car" }; } }
+  for (const b of G.builds) { const d = Math.hypot(b.x - fx, b.y - fy) - Math.max(b.R.w, b.R.h) / 2; if (d < 34 && d < bd) { bd = d; best = { type: "build", b }; } }
+  if (!best && G.inv.rod > 0) { const w = waterSpot(); if (w) best = { type: "fishing", x: w.x, y: w.y }; }
   return best;
 }
 
 function interactLabel(o) {
   if (!o) return "";
-  if (GATHER[o.type]) return GATHER[o.type].n;
+  if (GATHER[o.type]) return o.car ? "Разобрать машину на запчасти" : GATHER[o.type].n;
+  if (o.type === "build") return buildLabel(o.b);
+  if (o.type === "fishing") return "Рыбачить";
+  if (o.type === "loot") return "Взять: " + o.label;
   switch (o.type) {
     case "note": return "Читать: " + NOTES[o.key].t;
     case "crate": return o.full ? "Обыскать ящик" : "Пустой ящик";
@@ -711,12 +733,12 @@ function interactLabel(o) {
     case "wchest": return o.full ? "Открыть: " + o.label : "Пустой ящик";
     case "seal": return "Взять: " + o.label;
     case "altar": return G.placed ? "Алтарь" : "Положить печати на алтарь";
-    case "car": return o.full ? "Обыскать багажник" : "Машина";
+    case "car": { const c = G.car; return c.trunk ? "Обыскать багажник" : !c.engine ? (G.inv.engine ? "Поставить двигатель" : "Машина: нет двигателя") : c.fuel < 1 ? (G.inv.fuel ? "Залить бензин" : "Машина: пустой бак") : "Сесть за руль"; }
   }
   return "";
 }
 
-function isHoldAction(o) { return !!GATHER[o.type]; }
+function isHoldAction(o) { return !!GATHER[o.type] || (o.type === "build" && buildHold(o.b)); }
 
 function doInteract(o) {
   const p = G.p;
@@ -774,16 +796,22 @@ function doInteract(o) {
       if (G.night < 0.6) { toast("Камни молчат. Дождись ночи.", 2.5); return; }
       startBoss();
       return;
-    case "car":
-      if (o.full) { o.full = false; addItem("cloth", 2); addItem("battery", 1); addItem("bandage", 1); Sound.pickup(); toast("В багажнике: тряпки, батарейка, бинт.", 3); }
-      else toast("Машина мертва. Аккумулятор сел.", 2);
+    case "car": carInteract(); return;
+    case "build": buildUse(o.b); return;
+    case "fishing": startFishing(o); return;
+    case "loot":
+      o.taken = true;
+      for (const k in o.give) addItem(k, o.give[k]);
+      Sound.pickup();
+      if (o.give.engine) tip("engine2", "Двигатель у тебя. Отнеси его к своей машине у дороги на юге деревни.", "🔧");
+      if (o.give.rod) tip("rod", "Удочка! Подойди к воде и смотри на неё — появится «Рыбачить».", "🎣");
       return;
   }
 }
 
 function finishGather(o) {
   const g = GATHER[o.type];
-  for (const [k, q] of g.give()) addItem(k, q);
+  for (const [k, q] of g.give(o)) addItem(k, q);
   o.left--; World.dirty = true;
   if (o.left <= 0) { o.regrow = G.day + g.regrow; if (o.type === "rock" || o.type === "scrap") o.block = false; }
   Sound.pickup();
@@ -818,12 +846,14 @@ function newDay() {
 
 function nearBench() {
   const p = G.p;
-  return World.inter.some(o => o.type === "bench" && dist2(o.x, o.y, p.x, p.y) < 110 * 110);
+  return World.inter.some(o => o.type === "bench" && dist2(o.x, o.y, p.x, p.y) < 110 * 110) || G.builds.some(b => b.k === "bench" && dist2(b.x, b.y, p.x, p.y) < 120 * 120);
 }
+function nearCookFire() { return !!nearFire(G.p.x, G.p.y, 150); }
 
 function craft(r) {
   if (!has(r.need)) return;
   if (r.where === "bench" && !nearBench()) { toast("Нужен верстак", 1.5); return; }
+  if (r.where === "fire" && !nearCookFire()) { toast("Нужен огонь: костёр или печь", 1.5); return; }
   if (r.w && G.owned.includes(r.out)) return;
   take(r.need);
   const p = G.p;
@@ -855,7 +885,8 @@ function useItem(k) {
   } else if (k === "battery") {
     if (p.bat > 90) { toast("Батарея почти полная", 1.2); return false; }
     p.bat = 100;
-  } else return false;
+  } else if (ITEMS[k] && ITEMS[k].food) return eat(k);
+  else return false;
   G.inv[k]--; Sound.pickup(); toast(`Использовано: ${ITEMS[k].n}`, 1.5);
   return true;
 }
@@ -968,7 +999,7 @@ function updateCreepy(dt) {
     const a = p.a + (Math.random() - 0.5) * 1.2, d = 480 + Math.random() * 200;
     const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
     const ci = Math.floor(y / World.ncell) * World.nw + Math.floor(x / World.ncell);
-    if (x > 60 && y > 60 && x < WORLD_W - 60 && y < WORLD_H - 60 && !World.nav[ci]) G.figure = { x, y, t: 14, lit: 0 };
+    if (x > 60 && y > 60 && x < World.W - 60 && y < World.H - 60 && !World.nav[ci]) G.figure = { x, y, t: 14, lit: 0 };
   }
   if (G.figure) {
     const f = G.figure, d = Math.hypot(f.x - p.x, f.y - p.y);
@@ -1033,8 +1064,10 @@ function update(dt) {
   G.inside = insideHouse(p.x, p.y);
   if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
   for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; toast(h.name, 2.5); }
+  if (G.inside && !G.base && G.step >= 2) tip("claim", "Любой дом можно сделать своей базой и укреплять. Открой стройку, когда стоишь внутри дома.", "🔨");
   if (World.altar && !G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
 
+  if (G.drive && carHere()) { driveCar(dt, inp); } else {
   // movement
   // first person: forward/strafe relative to where the player looks
   const fw = (inp.up - inp.down) - inp.mvY, st = (inp.right - inp.left) + inp.mvX;
@@ -1054,6 +1087,8 @@ function update(dt) {
   collide(p);
   p.vx = (p.x - ox) / dt; p.vy = (p.y - oy) / dt;
   if (p.moving) { p.stepT -= dt * spd / 150; if (p.stepT <= 0) { p.stepT = 0.38; Sound.step(); } }
+  }
+  if (!G.drive) Sound.engine(0, 0);
 
   // aim
 
@@ -1068,7 +1103,8 @@ function update(dt) {
   G.shake *= Math.pow(0.004, dt);
   if (G.noise) { G.noise.t -= dt; if (G.noise.t <= 0) G.noise = null; }
 
-  if (inp.attack && !p.act) attack();
+  if (G.place) { updatePlacement(); if (inp.attack && !inp.placeUsed) { inp.placeUsed = true; placeBuild(); } if (!inp.attack) inp.placeUsed = false; }
+  else if (inp.attack && !p.act && !G.drive) attack();
 
   // flashlight
   if (p.light && G.lightOff <= 0) {
@@ -1082,7 +1118,18 @@ function update(dt) {
   computeRays();
 
   // interaction (E): press for instant actions, hold for gathering
-  const target = findInteract();
+  if (G.drive) {
+    G.target = null;
+    if (inp.interact && !inp.interactUsed) { inp.interactUsed = true; exitCar(); }
+    if (!inp.interact) inp.interactUsed = false;
+  }
+  if (G.fishing) {
+    const pressed = inp.interact && !inp.interactUsed;
+    if (pressed) inp.interactUsed = true;
+    updateFishing(dt, pressed, p.moving);
+    if (!inp.interact) inp.interactUsed = false;
+  }
+  const target = G.drive || G.fishing ? null : findInteract();
   G.target = target;
   if (target) {
     if (GATHER[target.type]) tip("gather", `Держи ${K("✋", "E")}, чтобы добывать ресурсы. Топор рубит в 3 раза быстрее.`);
@@ -1097,19 +1144,31 @@ function update(dt) {
   if ((G.inv.fang || 0) > 0) tip("fang", "Клыки тварей нужны для мачете и капканов.");
   if (G.mons.some(m => m.beam && !m.fake && m.type === "stalker")) tip("stalker", "Это Тень. Пока свет фонаря на ней — она не двигается. Не отворачивайся!");
   else if (G.mons.some(m => m.beam && !m.fake)) tip("monster", `Тварь! Бей — ${K("⚔", "ЛКМ")}. Выстрелы громкие и приманивают других.`);
-  if (inp.interact && target) {
+  if (inp.interact && target && !G.drive && !G.fishing) {
     if (isHoldAction(target)) {
       if (p.act !== target) { p.act = target; p.actProg = 0; p.actTick = 0; }
-      const time = GATHER[target.type].time();
+      const time = target.type === "build" ? 1.2 : GATHER[target.type].time();
       p.actProg += dt; p.actTick -= dt;
-      if (p.actTick <= 0) { p.actTick = 0.35; Sound[GATHER[target.type].snd](); spark(target.x, target.y, target.type === "tree" ? "#8a6a40" : target.type === "bush" ? "#4a7a30" : "#999", 2, 80); makeNoise(p.x, p.y, 320); }
-      if (p.actProg >= time) { finishGather(target); p.actProg = 0; if (target.left <= 0) p.act = null; }
+      if (p.actTick <= 0) { p.actTick = 0.35; if (target.type === "build") Sound.chop(); else { Sound[GATHER[target.type].snd](); spark(target.x, target.y, target.type === "tree" ? "#8a6a40" : target.type === "bush" ? "#4a7a30" : "#999", 2, 80); } makeNoise(p.x, p.y, 320); }
+      if (p.actProg >= time) { if (target.type === "build") { unbuild(target.b); p.act = null; } else { finishGather(target); p.actProg = 0; if (target.left <= 0) p.act = null; } }
     } else if (!inp.interactUsed) {
       inp.interactUsed = true;
       doInteract(target);
     }
   } else { p.act = null; p.actProg = 0; }
   if (!inp.interact) inp.interactUsed = false;
+
+  // hunger: about a day and a half from full to empty
+  p.food = Math.max(0, (p.food == null ? 100 : p.food) - dt * 100 / (DAY_LEN * 1.5));
+  if (p.food <= 0) { p.hp -= 0.6 * dt; if (p.hp <= 0) { p.hp = 0; die(); return; } }
+  if (p.food < 30) tip("hunger", "Ты голоден. Ешь: рыба, овощи с грядки, тушёнка из ящиков. Готовь на костре или печи.", "🍖");
+  // regions announce themselves
+  if (!World.indoor) {
+    const reg = regionAt(p.x, p.y), name = reg ? reg.name : null;
+    if (name !== G.lastRegion) { if (name) toast(name, 2.5); G.lastRegion = name; }
+  }
+  if (G.step !== G.lastStep) { G.lastStep = G.step; if (STEPS[G.step] && G.step < 7) G.objBanner = { text: STEPS[G.step].t, t: 6 }; }
+  if (G.objBanner) { G.objBanner.t -= dt; if (G.objBanner.t <= 0) G.objBanner = null; }
 
   // sanity
   const lightHere = Math.max(1 - G.night, nearFire(p.x, p.y, 240) ? 1 : 0, World.lights.some(l => dist2(p.x, p.y, l.x, l.y) < l.r * l.r) ? 0.8 : 0, p.light && G.lightOff <= 0 ? 0.45 : 0);
@@ -1145,6 +1204,7 @@ function update(dt) {
   updateRoots(dt);
   updateHazards(dt);
   updateCreepy(dt);
+  updateBuilds(dt);
   updateProjs(dt);
 
   for (const q of G.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.92; q.vy *= 0.92; q.life -= dt; }

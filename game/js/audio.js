@@ -63,7 +63,7 @@ const Sound = (() => {
     ws.connect(wf); wf.connect(windGain); ws.start();
   }
 
-  let beatT = 0, rainGain = null;
+  let beatT = 0, rainGain = null, eng = null;
   return {
     init,
     get muted() { return muted; },
@@ -161,6 +161,25 @@ const Sound = (() => {
     spikes() { noise(0.2, { type: "highpass", freq: 1800, vol: 0.5, attack: 0.001 }); tone(400, 0.15, { type: "square", vol: 0.1, freqEnd: 200 }); },
     trap() { noise(0.15, { type: "highpass", freq: 2000, vol: 0.8, attack: 0.001 }); tone(1600, 0.2, { type: "square", vol: 0.15, freqEnd: 900 }); },
     twang() { tone(220, 0.4, { type: "triangle", vol: 0.25, freqEnd: 180 }); noise(0.25, { type: "highpass", freq: 3000, vol: 0.2, when: 0.05 }); },
+    engineStart() { tone(60, 0.8, { type: "sawtooth", vol: 0.25, freqEnd: 110, attack: 0.1 }); noise(0.6, { type: "lowpass", freq: 400, vol: 0.3, attack: 0.1 }); },
+    engine(on, speed) {
+      if (!ctx) return;
+      if (!eng) {
+        eng = { g: ctx.createGain(), o1: ctx.createOscillator(), o2: ctx.createOscillator(), f: ctx.createBiquadFilter() };
+        eng.g.gain.value = 0; eng.f.type = "lowpass"; eng.f.frequency.value = 500;
+        eng.o1.type = "sawtooth"; eng.o2.type = "square";
+        eng.o1.connect(eng.f); eng.o2.connect(eng.f); eng.f.connect(eng.g); eng.g.connect(master);
+        eng.o1.start(); eng.o2.start();
+      }
+      const t = ctx.currentTime;
+      eng.g.gain.setTargetAtTime(on ? 0.07 + speed * 0.08 : 0, t, 0.15);
+      eng.o1.frequency.setTargetAtTime(38 + speed * 90, t, 0.1);
+      eng.o2.frequency.setTargetAtTime(19 + speed * 45, t, 0.1);
+    },
+    carHit() { noise(0.25, { type: "lowpass", freq: 800, vol: 0.7, attack: 0.002 }); tone(70, 0.2, { vol: 0.4, freqEnd: 40 }); },
+    turret(d2) { const v = Math.max(0.05, 0.5 - Math.sqrt(d2) / 1400); noise(0.18, { type: "bandpass", freq: 1800, q: 1, vol: v, attack: 0.001 }); tone(140, 0.08, { type: "square", vol: v * 0.3, freqEnd: 60 }); },
+    splash() { noise(0.4, { type: "lowpass", freq: 1500, freqEnd: 300, vol: 0.3, attack: 0.01 }); },
+    bite() { noise(0.15, { type: "bandpass", freq: 1200, q: 3, vol: 0.4 }); tone(900, 0.12, { vol: 0.15 }); tone(1300, 0.12, { vol: 0.12, when: 0.12 }); },
     bossRoar() { tone(45, 2, { type: "sawtooth", vol: 0.5, freqEnd: 30, attack: 0.2 }); noise(2, { type: "lowpass", freq: 500, vol: 0.6, attack: 0.3 }); },
   };
 })();

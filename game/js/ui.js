@@ -8,7 +8,7 @@ const Input = {
   sprintToggle: false, mvId: null, lookId: null, mvO: null, lookP: null,
 };
 
-const Settings = { scares: true, sens: 1 };
+const Settings = { scares: true, sens: 1, labels: "auto" };
 try { Object.assign(Settings, JSON.parse(localStorage.getItem("bp.settings") || "{}")); } catch (e) {}
 function saveSettings() { try { localStorage.setItem("bp.settings", JSON.stringify(Settings)); } catch (e) {} }
 
@@ -43,10 +43,10 @@ const UI = {
       li.innerHTML = `<span>${ITEMS[k].icon} ${ITEMS[k].n}</span><b>${G.inv[k]}</b>`;
       res.appendChild(li);
     }
-    for (const k of ["bandage", "medkit", "tea", "battery"]) {
+    for (const k of ["bandage", "medkit", "tea", "battery", ...Object.keys(ITEMS).filter(k => ITEMS[k].food)]) {
       if (!(G.inv[k] > 0)) continue;
       const b = document.createElement("button");
-      b.className = "btn small"; b.textContent = `${ITEMS[k].icon} ${ITEMS[k].n} (${G.inv[k]})`;
+      b.className = "btn small"; b.textContent = `${ITEMS[k].food ? "Съесть: " : ""}${ITEMS[k].icon} ${ITEMS[k].n} (${G.inv[k]})`;
       b.onclick = () => { useItem(k); this.renderInv(); };
       use.appendChild(b);
     }
@@ -54,20 +54,45 @@ const UI = {
     const bench = nearBench();
     $("#inv-bench").textContent = bench ? "🔨 Ты у верстака — доступен весь крафт" : "Без верстака доступен только простой крафт. Верстаки: дом лесника, хижина охотника.";
     $("#inv-bench").className = bench ? "ok" : "muted";
-    const ready = r => has(r.need) && (r.where === "any" || bench);
+    const fire = nearCookFire();
+    const okWhere = r => r.where === "any" || (r.where === "bench" && bench) || (r.where === "fire" && fire);
+    const ready = r => has(r.need) && okWhere(r);
     const recs = RECIPES.filter(r => !(r.w && G.owned.includes(r.out))).sort((a, b) => ready(b) - ready(a));
     for (const r of recs) {
-      const can = has(r.need), place = r.where === "any" || bench;
+      const can = has(r.need), place = okWhere(r);
       const li = document.createElement("li");
       li.className = "rec" + (can && place ? "" : " off");
       const need = Object.entries(r.need).map(([k, q]) => `<span class="${(G.inv[k] || 0) >= q ? "have" : "lack"}">${ITEMS[k].icon}${ITEMS[k].n} ${G.inv[k] || 0}/${q}</span>`).join(" ");
-      li.innerHTML = `<div><b>${r.n}</b>${r.where === "bench" ? ' <small class="tag">верстак</small>' : ""}<div class="need">${need}</div>${r.d ? `<small class="muted">${r.d}</small>` : ""}</div>`;
+      li.innerHTML = `<div><b>${r.n}</b>${r.where === "bench" ? ' <small class="tag">верстак</small>' : r.where === "fire" ? ' <small class="tag">огонь</small>' : ""}<div class="need">${need}</div>${r.d ? `<small class="muted">${r.d}</small>` : ""}</div>`;
       const b = document.createElement("button");
       b.className = "btn small"; b.textContent = "Создать"; b.disabled = !(can && place);
       b.onclick = () => { craft(r); if (r.out === "campfire" || r.out === "trap") this.close(); else this.renderInv(); };
       li.appendChild(b);
       list.appendChild(li);
     }
+  },
+  openBuild() {
+    const box = $("#build-list"), head = $("#build-head");
+    box.innerHTML = "";
+    const here = G.inside && (!G.base || G.base.id !== G.inside.id || G.base.map !== World.map);
+    head.innerHTML = G.base && G.base.map === World.map
+      ? `<b>⌂ База: ${G.base.name}</b> <span class="muted">— строить можно в радиусе ${Math.round(BASE_R / 40)} м от дома.</span>`
+      : `<span class="muted">У тебя нет базы на этой карте. Зайди в любой дом и нажми «Сделать базой».</span>`;
+    const claim = $("#claim");
+    claim.hidden = !here;
+    claim.textContent = G.inside ? `⌂ Сделать базой: ${G.inside.name}` : "";
+    for (const d of BUILDS) {
+      const li = document.createElement("li");
+      const can = has(d.need);
+      li.className = "rec" + (can && G.base ? "" : " off");
+      const need = Object.entries(d.need).map(([k, q]) => `<span class="${(G.inv[k] || 0) >= q ? "have" : "lack"}">${ITEMS[k].icon}${ITEMS[k].n} ${G.inv[k] || 0}/${q}</span>`).join(" ");
+      li.innerHTML = `<div><b>${d.icon} ${d.n}</b><div class="need">${need}</div><small class="muted">${d.d}</small></div>`;
+      const b = document.createElement("button");
+      b.className = "btn small"; b.textContent = "Ставить"; b.disabled = !(can && G.base && G.base.map === World.map);
+      b.onclick = () => { this.close(); startPlace(d.k); requestLock(); };
+      li.appendChild(b); box.appendChild(li);
+    }
+    this.open("build");
   },
   openJournal() {
     const l = $("#journal-list");
@@ -100,6 +125,7 @@ const UI = {
     $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
     $("#q-btn").textContent = "Графика: " + QUALITY[V.quality].n;
     $("#scare-btn").textContent = "Скримеры: " + (Settings.scares ? "вкл" : "выкл");
+    $("#label-btn").textContent = "Подписи кнопок: " + ({ auto: "сначала", on: "всегда", off: "выкл" }[Settings.labels] || "сначала");
     $("#sens").value = Settings.sens;
     $("#sens-v").textContent = Settings.sens.toFixed(1) + "×";
   },
@@ -234,6 +260,7 @@ function onKey(e, down) {
   if (k === "Tab") e.preventDefault();
   if (!down || e.repeat) return;
   if (k === "Escape") {
+    if (G.place) { G.place = null; return; }
     if (G.showMap) { G.showMap = false; requestLock(); return; }
     if (UI.modal && G.state === "play") { UI.close(); return; }
     UI.pause(); return;
@@ -243,7 +270,10 @@ function onKey(e, down) {
   if (k === "KeyJ") { if (UI.modal === "journal") { UI.close(); requestLock(); } else if (!UI.modal) UI.openJournal(); return; }
   if (k === "KeyM") { if (!UI.modal) G.showMap = !G.showMap; return; }
   if (UI.modal || G.showMap) return;
+  if (k === "KeyC") { if (!G.drive) UI.openBuild(); return; }
+  if (k === "KeyR" && G.place) { G.place.rot = 1 - G.place.rot; return; }
   if (k === "KeyF") toggleLight();
+  else if (k === "KeyX") quickEat();
   else if (k === "KeyR") startReload();
   else if (k === "KeyQ") cycleWeapon(1);
   else if (k === "KeyH") quickHeal();
@@ -348,6 +378,11 @@ function setupTouch() {
   btn("#t-pause", () => UI.pause());
   btn("#t-home", () => { releaseAll(); UI.askExit(); });
   btn("#t-help", () => { releaseAll(); UI.open("help"); UI.helpBack = "play"; });
+  btn("#t-build", () => { releaseAll(); UI.openBuild(); });
+  btn("#t-ok", () => placeBuild());
+  btn("#t-rot", () => { if (G.place) G.place.rot = 1 - G.place.rot; });
+  btn("#t-cancel", () => { G.place = null; });
+  btn("#t-eat", () => quickEat());
   btn("#t-run", () => { Input.sprintToggle = !Input.sprintToggle; G.input.sprint = Input.sprintToggle; $("#t-run").classList.toggle("on", Input.sprintToggle); });
 }
 
@@ -396,6 +431,7 @@ function boot() {
   $("#p-help").onclick = () => { UI.open("help"); UI.helpBack = "pause"; };
   $("#snd-btn").onclick = () => { Sound.init(); Sound.toggleMute(); $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл"); };
   $("#q-btn").onclick = () => { const order = ["low", "mid", "high"]; setQuality(order[(order.indexOf(V.quality) + 1) % 3]); UI.syncSettings(); };
+  $("#label-btn").onclick = () => { const o = ["auto", "on", "off"]; Settings.labels = o[(o.indexOf(Settings.labels) + 1) % 3]; saveSettings(); UI.syncSettings(); };
   $("#scare-btn").onclick = () => { Settings.scares = !Settings.scares; saveSettings(); UI.syncSettings(); };
   $("#sens").oninput = e => { Settings.sens = +e.target.value; saveSettings(); $("#sens-v").textContent = Settings.sens.toFixed(1) + "×"; };
   $("#to-title").onclick = () => UI.askExit();
@@ -403,6 +439,8 @@ function boot() {
   $("#exit-nosave").onclick = () => exitToTitle(false);
   $("#exit-cancel").onclick = () => { UI.close(); if (G.state === "play") requestLock(); };
   $("#guide-btn").onclick = () => UI.openGuide();
+  $("#build-close").onclick = () => { UI.close(); requestLock(); };
+  $("#claim").onclick = () => { claimBase(); UI.openBuild(); };
   $("#p-guide").onclick = () => UI.openGuide();
   $("#help-guide").onclick = () => UI.openGuide();
   $("#guide-close").onclick = () => { UI.close(); if (G.state === "play") requestLock(); else $("#title").hidden = false; };
@@ -412,7 +450,8 @@ function boot() {
   $("#end-title").onclick = () => toTitle();
 
   toTitle();
-  const tAct = $("#t-act");
+  const tAct = $("#t-act"), touchRoot = $("#touch"), hintBtns = [...document.querySelectorAll("#touch .tb")];
+  const TIP_BTN = { "✋": "t-act", "⚔": "t-atk", "🔨": "t-build", "🎒": "t-inv", "🔦": "t-light", "🩹": "t-heal", "🍖": "t-eat", "✔": "t-ok", "⛽": "t-act", "🔧": "t-act", "🎣": "t-act", "🌱": "t-build" };
   let last = performance.now();
   const frame = now => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -423,7 +462,15 @@ function boot() {
       G.p.a += dt * 0.12; G.p.light = true;
       Sound.update(dt, 1, 0, false);
     } else Sound.update(dt, G.night, 0, false);
-    if (Input.touch) tAct.classList.toggle("ready", running && !!G.target);
+    if (Input.touch) {
+      tAct.classList.toggle("ready", running && (!!G.target || G.drive || (G.fishing && G.fishing.bite > 0)));
+      touchRoot.classList.toggle("placing", !!G.place);
+      touchRoot.classList.toggle("driving", !!G.drive);
+      const hint = G.tip && TIP_BTN[G.tip.icon];
+      for (const b of hintBtns) b.classList.toggle("hint", !!hint && b.id === hint);
+      // labels under the buttons fade once the player knows them
+      touchRoot.classList.toggle("nolabels", Settings.labels === "off" || (Settings.labels !== "on" && (G.clock || 0) > 240));
+    }
     render3d(running || G.state === "title" || G.state === "intro" ? dt : 0);
     renderHud(running ? dt : 0);
     requestAnimationFrame(frame);

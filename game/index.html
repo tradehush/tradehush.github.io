@@ -54,7 +54,9 @@
         <li><kbd>R</kbd> перезарядка</li>
         <li><kbd>1–8</kbd>, <kbd>Q</kbd>, колесо — оружие</li>
         <li><kbd>Tab</kbd> / <kbd>I</kbd> сумка и крафт</li>
-        <li><kbd>H</kbd> лечение, <kbd>G</kbd> отвар, <kbd>B</kbd> батарейка</li>
+        <li><kbd>H</kbd> лечение, <kbd>G</kbd> отвар, <kbd>B</kbd> батарейка, <kbd>X</kbd> поесть</li>
+        <li><kbd>C</kbd> стройка, <kbd>R</kbd> повернуть постройку</li>
+        <li>В машине: <kbd>W S</kbd> газ/тормоз, <kbd>A D</kbd> руль, <kbd>E</kbd> выйти</li>
         <li><kbd>J</kbd> журнал, <kbd>M</kbd> карта, <kbd>Esc</kbd> пауза</li>
       </ul>
       <div>
@@ -72,6 +74,9 @@
       <li><span class="ic">🔦</span> Фонарь вкл/выкл.</li>
       <li><span class="ic">🩹</span> Лечение: аптечка, если есть, иначе бинт.</li>
       <li><span class="ic">🏃</span> Бег (переключатель). Или отведи стик до края.</li>
+      <li><span class="ic">🍖</span> Съесть лучшее, что есть в сумке.</li>
+      <li><span class="ic">🔨</span> Стройка: сделать дом базой, ставить заборы, турели, грядки. При установке: <span class="ic">✔</span> поставить, <span class="ic">⟲</span> повернуть, <span class="ic">✕</span> закончить.</li>
+      <li>В машине левый стик — газ и руль, <span class="ic">✋</span> — выйти.</li>
       <li><span class="ic">🗺</span> Карта. <span class="ic">🎒</span> Сумка и крафт. <span class="ic">❚❚</span> Пауза. <span class="ic">⌂</span> Главное меню. <span class="ic">?</span> Эта справка.</li>
     </ul>
     <div class="row"><button class="btn" id="help-close">Понятно</button><button class="btn ghost" id="help-guide">Как крафтить</button></div>
@@ -116,10 +121,22 @@
       <li><b>Топор, патроны, батарейки и капканы</b> — только у верстака. Верстаки стоят в доме лесника и в хижине охотника.</li>
       <li><b>Оружие не крафтится — его находят.</b> Оружейные ящики спрятаны в конце подземелий: пистолет — в старой шахте, арбалет — в катакомбах под часовней, дробовик — в бункере за лагерем. Бита и мачете лежат в тайниках в деревне и в лагере, а иногда попадаются и в обычных ящиках.</li>
       <li><b>С чего начать:</b> топор (4 дерева + 3 камня), потом бинты и костёр на ночь. В подземелья лучше идти с запасом бинтов и батареек.</li>
+      <li><b>Еда.</b> Сытость падает за полтора дня. Рыба (удочка — в рыбацкой хижине у озера или крафт), овощи с грядки, тушёнка из ящиков. Сырую рыбу и овощи лучше готовить у костра или печи.</li>
+      <li><b>Машина</b> стоит у дороги к югу от деревни. Нужен двигатель (в автомастерской или собрать на верстаке из 4 запчастей и 6 металлолома — запчасти в разбитых машинах) и бензин (заправка, ящики или самодельный на верстаке).</li>
+      <li><b>База.</b> Зайди в любой дом, открой 🔨 Стройку и сделай его базой. Вокруг можно ставить заборы, стены, калитки, колья, турели (заряжаются патронами 9мм), прожекторы, печь, грядки, кровать и верстак.</li>
     </ol>
     <h3>Все рецепты</h3>
     <ul id="guide-list" class="guide"></ul>
     <button class="btn" id="guide-close">Закрыть</button>
+  </div>
+</div>
+
+<div id="build" class="panel" hidden>
+  <div class="box wide">
+    <div class="head"><h2>Стройка</h2><button class="btn ghost small" id="build-close">✕</button></div>
+    <p id="build-head"></p>
+    <button class="btn" id="claim" hidden></button>
+    <ul id="build-list" class="craft"></ul>
   </div>
 </div>
 
@@ -154,6 +171,7 @@
       <button class="btn ghost" id="snd-btn">Звук: вкл</button>
       <button class="btn ghost" id="q-btn">Графика: Средняя</button>
       <button class="btn ghost" id="scare-btn">Скримеры: вкл</button>
+      <button class="btn ghost" id="label-btn">Подписи кнопок: вкл</button>
       <label class="sens" for="sens">Чувствительность обзора <b id="sens-v">1.0×</b><input type="range" id="sens" min="0.4" max="2.5" step="0.1" value="1"></label>
       <button class="btn ghost" id="to-title">В главное меню</button>
     </div>
@@ -187,6 +205,7 @@
     <button id="t-map" class="tb sm" aria-label="Карта">🗺<i>карта</i></button>
     <button id="t-inv" class="tb sm" aria-label="Сумка">🎒<i>сумка</i></button>
     <button id="t-pause" class="tb sm" aria-label="Пауза">❚❚<i>пауза</i></button>
+    <button id="t-build" class="tb sm" aria-label="Стройка">🔨<i>стройка</i></button>
     <button id="t-home" class="tb sm" aria-label="Главное меню">⌂<i>меню</i></button>
   </div>
   <div class="tbar side">
@@ -197,6 +216,12 @@
     <button id="t-light" class="tb" aria-label="Фонарь">🔦<i>фонарь</i></button>
     <button id="t-heal" class="tb" aria-label="Лечение">🩹<i>лечить</i></button>
     <button id="t-run" class="tb" aria-label="Бег">🏃<i>бег</i></button>
+    <button id="t-eat" class="tb" aria-label="Еда">🍖<i>есть</i></button>
+  </div>
+  <div class="tbar place">
+    <button id="t-ok" class="tb big" aria-label="Поставить">✔<i>поставить</i></button>
+    <button id="t-rot" class="tb" aria-label="Повернуть">⟲<i>повернуть</i></button>
+    <button id="t-cancel" class="tb" aria-label="Готово">✕<i>готово</i></button>
   </div>
 </div>
 
@@ -205,6 +230,7 @@
 <script src="js/audio.js"></script>
 <script src="js/world.js"></script>
 <script src="js/game.js"></script>
+<script src="js/life.js"></script>
 <script src="js/scene3d.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/ui.js"></script>

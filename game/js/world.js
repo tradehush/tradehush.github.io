@@ -19,9 +19,10 @@ const WT = 14;      // wall thickness
 const DOOR = 64;    // door width
 
 const World = {
+  W: 24000, H: 24000,
   houses: [], walls: [], furn: [], res: [], stones: [], swamp: [], roads: [], props: [],
-  inter: [], lights: [], grid: null, gcell: 100, gw: 0, gh: 0,
-  nav: null, ncell: 25, nw: 0, nh: 0, start: { x: 430, y: 3800 }, altar: null,
+  inter: [], lights: [], grid: null, gcell: 100, gw: 0, gh: 0, rgrid: null, rcell: 250, rw: 0, rh: 0,
+  nav: null, ncell: 25, nw: 0, nh: 0, start: { x: 430, y: 3800 }, altar: null, regions: [],
 };
 
 // --- house construction ------------------------------------------------------
@@ -161,13 +162,11 @@ function buildForest(rnd) {
     [[1760, 1660], [1400, 1500], [1100, 1150], [800, 860], [560, 640]],
     [[2900, 1780], [3200, 1450], [3480, 1170]],
   ];
-  exitTo("swamp", 560, 640, 640, 720, "sign", "Старая дорога: Гнилые топи");
-  exitTo("camp", 3940, 3060, 3850, 3060, "sign", "Дорога в лагерь «Зорька»");
+  decor("sign", 560, 640, 2.4); decor("sign", 3940, 3060, 0);
   exitTo("mine", 3520, 1120, 3460, 1190, "mine", "Войти в старую шахту");
   for (let i = 0; i < 7; i++) { const a = -0.3 + i * 0.5; World.stones.push({ x: 3520 + Math.cos(a - Math.PI * 0.75) * 70, y: 1120 + Math.sin(a - Math.PI * 0.75) * 70, r: 22, type: "stone" }); }
 
-  World.furn.push({ x: 330, y: 3850, w: 110, h: 56, kind: "car" });
-  inter({ type: "car", x: 385, y: 3878, r: 80, full: true });
+  World.carStart = { x: 385, y: 3878, a: -0.15 };
 
   const cx = 2100, cy = 430;
   World.altar = inter({ type: "altar", x: cx, y: cy, r: 70 });
@@ -200,7 +199,6 @@ function buildCamp(rnd) {
     [[1950, 2050], [2350, 2100], [2700, 2120]],
     [[1730, 2050], [1730, 2260]], [[2380, 2100], [2380, 2340]],
   ];
-  exitTo("forest", 110, 2000, 220, 2000, "sign", "Дорога назад, в Чёрную Сосну");
   exitTo("bunker", 3320, 2900, 3250, 2840, "bunker", "Спуститься в бункер");
   decor("gate", 700, 2000, 0);
   decor("flag", 1950, 1960, 0);
@@ -245,7 +243,6 @@ function buildSwamp(rnd) {
     [[3000, 3000], [2400, 3200]],
     [[2500, 2550], [1700, 2650], [1420, 2680]],
   ];
-  exitTo("forest", 3640, 3640, 3500, 3500, "sign", "Тропа назад, в Чёрную Сосну");
   const wi = addHouse({ id: "witch", name: "Дом Агафьи", x: 1880, y: 1820, w: 320, h: 280, door: "e", floor: "#26281e", roof: "#1d2017" });
   furn(wi, 120, 100, 60, 60, "cauldron");
   inter({ type: "note", key: "witch", x: wi.x + 60, y: wi.y + 240, r: 40 });
@@ -323,7 +320,7 @@ function buildDungeon(rnd, id) {
   const start = list[0], end = list[list.length - 1];
   World.rooms = list;
   World.start = { x: start.cx, y: start.cy + 40 };
-  exitTo(id === "bunker" ? "camp" : "forest", start.cx, start.cy - 20, start.cx, start.cy + 50, "ladder", "Подняться наверх");
+  exitTo("forest", start.cx, start.cy - 20, start.cx, start.cy + 50, "ladder", "Подняться наверх");
   const tileXY = (r) => ({ x: ox + (r.x0 + 1 + rnd() * (r.x1 - r.x0 - 1)) * T, y: oy + (r.y0 + 1 + rnd() * (r.y1 - r.y0 - 1)) * T });
   // the prize at the end
   const prize = { catacombs: ["crossbow", { bolts: 10 }, "Ящик с арбалетом отца Михаила"], mine: ["pistol", { ammo9: 12 }, "Ящик в последнем забое"], bunker: ["shotgun", { shells: 8 }, "Оружейный ящик"] }[id];
@@ -365,11 +362,12 @@ function buildDungeon(rnd, id) {
 
 // --- shared scatter helpers ---------------------------------------------------------
 
-function addRes(o) { World.res.push(o); gridAdd(o); return o; }
+function addRes(o) { World.res.push(o); if (!World.composing) gridAdd(o); return o; }
 
 function scatterNature(rnd, o) {
+  if (World.composing) return;
   const okSpot = (x, y, near) => {
-    if (x < 40 || y < 40 || x > WORLD_W - 40 || y > WORLD_H - 40) return false;
+    if (x < 40 || y < 40 || x > World.W - 40 || y > World.H - 40) return false;
     if (insideHouse(x, y, 90)) return false;
     if (distToRoad(x, y) < 55) return false;
     for (const k of World.keep) if (dist2(x, y, k.x, k.y) < k.r * k.r) return false;
@@ -379,7 +377,7 @@ function scatterNature(rnd, o) {
     for (const q of gridQuery(x, y, near)) if (dist2(x, y, q.x, q.y) < (near + q.r) ** 2 * 0.5) return false;
     return true;
   };
-  const place = (n, fn) => { let tries = 0, k = 0; while (k < n && tries < n * 8) { tries++; const x = rnd() * WORLD_W, y = rnd() * WORLD_H; if (fn(x, y)) k++; } };
+  const place = (n, fn) => { let tries = 0, k = 0; while (k < n && tries < n * 8) { tries++; const x = rnd() * World.W, y = rnd() * World.H; if (fn(x, y)) k++; } };
   place(o.trees, (x, y) => {
     if (!okSpot(x, y, 40)) return null;
     const dead = rnd() < o.dead;
@@ -388,11 +386,12 @@ function scatterNature(rnd, o) {
   place(o.rocks, (x, y) => okSpot(x, y, 50) && addRes({ type: "rock", x, y, r: 14 + rnd() * 12, left: 4, max: 4, regrow: 0, block: true, sh: rnd() }));
   place(o.bushes, (x, y) => okSpot(x, y, 30) && addRes({ type: "bush", x, y, r: 14, left: 2, max: 2, regrow: 0, block: false, sh: rnd() }));
   place(o.scrap, (x, y) => okSpot(x, y, 60) && addRes({ type: "scrap", x, y, r: 18, left: 5, max: 5, regrow: 0, block: true, sh: rnd() }));
-  for (let i = 0; i < 2600; i++) World.props.push({ x: rnd() * WORLD_W, y: rnd() * WORLD_H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
+  for (let i = 0; i < 2600; i++) World.props.push({ x: rnd() * World.W, y: rnd() * World.H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
 }
 
 // creepy dressing: stick figures and bodies hang from trees, bones and blood on the ground
 function scatterHorror(rnd, o) {
+  if (World.composing) return;
   const trees = World.res.filter(r => r.type === "tree" && !r.dead);
   const nearTree = () => trees[Math.floor(rnd() * trees.length)];
   for (let i = 0; i < (o.effigy || 0); i++) { const t = nearTree(); if (t) decor("effigy", t.x + 14, t.y + 14, rnd() * 6, 0.8 + rnd() * 0.5); }
@@ -421,18 +420,201 @@ function gridQuery(x, y, rad, out = []) {
   return out;
 }
 
+// --- the big outdoor map: regions placed far apart, joined by roads ---------------
+
+// run a region builder in its own coordinates, then move everything it made by (dx, dy)
+function region(builder, rnd, dx, dy) {
+  const keys = ["houses", "walls", "furn", "inter", "lights", "roads", "swamp", "stones", "decor", "blood", "keep", "clear", "res"];
+  const L = {}; for (const k of keys) L[k] = World[k].length;
+  const prevStart = World.start, prevCar = World.carStart;
+  World.start = null; World.carStart = null;
+  builder(rnd);
+  for (const h of World.houses.slice(L.houses)) { h.x += dx; h.y += dy; h.doorPos.x += dx; h.doorPos.y += dy; }
+  for (const k of ["walls", "furn"]) for (const R of World[k].slice(L[k])) { R.x += dx; R.y += dy; }
+  for (const o of World.inter.slice(L.inter)) { o.x += dx; o.y += dy; if (o.ax != null) { o.ax += dx; o.ay += dy; } }
+  for (const k of ["lights", "swamp", "stones", "decor", "blood", "keep", "res"]) for (const o of World[k].slice(L[k])) { o.x += dx; o.y += dy; }
+  for (const c of World.clear.slice(L.clear)) { c.x0 += dx; c.x1 += dx; c.y0 += dy; c.y1 += dy; }
+  for (const r of World.roads.slice(L.roads)) for (const p of r) { p[0] += dx; p[1] += dy; }
+  World.start = World.start ? { x: World.start.x + dx, y: World.start.y + dy } : prevStart;
+  World.carStart = World.carStart ? { x: World.carStart.x + dx, y: World.carStart.y + dy, a: World.carStart.a } : prevCar;
+}
+
+// a plain abandoned house with a random set of furniture
+function cabin(rnd, x, y, name, id) {
+  const w = 220 + Math.floor(rnd() * 5) * 20, hh = 160 + Math.floor(rnd() * 4) * 20;
+  const doors = ["s", "n", "e", "w"];
+  const h = addHouse({ id, name, x, y, w, h: hh, door: doors[Math.floor(rnd() * 4)], floor: ["#3a2c20", "#33281f", "#2e2a24"][Math.floor(rnd() * 3)], roof: ["#2b211a", "#3a1f1a", "#262a22", "#30302a"][Math.floor(rnd() * 4)] });
+  const spots = [[20, 20], [w - 70, 20], [20, hh - 60], [w - 70, hh - 60]];
+  const kinds = ["table", "bed", "shelf", "wardrobe"];
+  spots.forEach(([fx, fy], i) => {
+    const k = kinds[(i + Math.floor(rnd() * 4)) % 4];
+    if (k === "bed") furn(h, fx, fy, 34, 62 > hh - fy - 20 ? 40 : 62, "bed");
+    else if (k === "table") furn(h, fx, fy, 50, 34, "table");
+    else if (k === "shelf") furn(h, fx, fy, 60, 24, "shelf");
+    else furn(h, fx, fy, 44, 30, "wardrobe");
+  });
+  crate(h, w / 2 - 15, hh / 2 - 15);
+  if (rnd() < 0.5) inter({ type: "loot", x: h.x + 40, y: h.y + hh / 2, r: 40, give: rnd() < 0.5 ? { canned: 1 } : { seeds: 2 }, label: rnd() < 0.5 ? "Банка тушёнки" : "Пакет семян" });
+  return h;
+}
+
+function buildPOIs(rnd) {
+  // gas station on the road to the camp
+  const gs = addHouse({ id: "gas", name: "Заправка №7", x: 14450, y: 12380, w: 300, h: 200, door: "s", floor: "#3a3a36", roof: "#5a1a14" });
+  furn(gs, 20, 20, 120, 30, "shelf"); furn(gs, 160, 20, 120, 30, "shelf"); furn(gs, 100, 110, 90, 30, "table");
+  crate(gs, 250, 150); crate(gs, 20, 150);
+  inter({ type: "loot", x: gs.x + 60, y: gs.y + 100, r: 40, give: { fuel: 1 }, label: "Канистра бензина" });
+  inter({ type: "loot", x: gs.x + 150, y: gs.y + 150, r: 40, give: { canned: 2 }, label: "Консервы" });
+  decor("canopy", 14600, 12780, 0); decor("pump", 14540, 12780, 0); decor("pump", 14660, 12780, 0);
+  World.regions.push({ name: "Заправка №7", x: 14600, y: 12600, r: 600 });
+  // car repair shop: the engine is here
+  const as = addHouse({ id: "garage", name: "Автомастерская", x: 6200, y: 14300, w: 380, h: 260, door: "e", floor: "#2a2a28", roof: "#30302a" });
+  furn(as, 20, 20, 110, 40, "bench"); inter({ type: "bench", x: as.x + 75, y: as.y + 60, r: 50 });
+  furn(as, 160, 140, 120, 70, "carlift");
+  inter({ type: "loot", x: as.x + 220, y: as.y + 120, r: 50, give: { engine: 1 }, label: "Двигатель (рабочий)" });
+  inter({ type: "loot", x: as.x + 60, y: as.y + 220, r: 40, give: { parts: 2 }, label: "Запчасти" });
+  crate(as, 330, 20); crate(as, 20, 200);
+  World.regions.push({ name: "Автомастерская", x: 6400, y: 14430, r: 600 });
+  // farm: seeds, food and a scarecrow
+  const fh = addHouse({ id: "farm", name: "Ферма", x: 10850, y: 16800, w: 340, h: 240, door: "n", floor: "#3a2c20", roof: "#3a2a1c" });
+  furn(fh, 20, 160, 34, 62, "bed"); furn(fh, 140, 100, 80, 40, "table"); furn(fh, 260, 20, 60, 24, "shelf");
+  crate(fh, 280, 180);
+  inter({ type: "loot", x: fh.x + 180, y: fh.y + 120, r: 40, give: { seeds: 4 }, label: "Мешок семян" });
+  const barn = addHouse({ id: "barn", name: "Амбар", x: 11400, y: 16700, w: 420, h: 300, door: "w", floor: "#3a3022", roof: "#4a2018" });
+  for (let i = 0; i < 4; i++) furn(barn, 300, 20 + i * 70, 100, 50, "hay");
+  crate(barn, 30, 30); crate(barn, 30, 240);
+  for (let i = 0; i < 6; i++) decor("soil", 10900 + (i % 3) * 110, 17200 + Math.floor(i / 3) * 90, 0);
+  decor("scarecrow", 11120, 17330, 0.4);
+  World.regions.push({ name: "Ферма", x: 11200, y: 17000, r: 700 });
+  // sawmill
+  const sm = addHouse({ id: "sawmill", name: "Лесопилка", x: 4900, y: 9050, w: 520, h: 300, door: "s", floor: "#3a2e20", roof: "#2a2418" });
+  furn(sm, 40, 40, 300, 60, "logs"); furn(sm, 380, 60, 100, 50, "bench"); inter({ type: "bench", x: sm.x + 430, y: sm.y + 115, r: 50 });
+  crate(sm, 40, 230); crate(sm, 460, 230);
+  World.regions.push({ name: "Лесопилка", x: 5160, y: 9200, r: 600 });
+  // the black lake with a fishing hut and a pier
+  for (let i = 0; i < 26; i++) { const a = rnd() * Math.PI * 2, d = rnd() * 700; World.swamp.push({ x: 12000 + Math.cos(a) * d, y: 4300 + Math.sin(a) * d * 0.6, r: 220 + rnd() * 160, lake: true }); }
+  const fhut = addHouse({ id: "fisher", name: "Рыбацкая хижина", x: 11500, y: 5250, w: 200, h: 150, door: "s", floor: "#33281f", roof: "#262a22" });
+  furn(fhut, 20, 20, 60, 24, "shelf"); crate(fhut, 150, 90);
+  inter({ type: "loot", x: fhut.x + 100, y: fhut.y + 75, r: 40, give: { rod: 1 }, label: "Удочка" });
+  decor("pier", 12000, 4950, 0);
+  World.regions.push({ name: "Чёрное озеро", x: 12000, y: 4400, r: 1300, fog: 1.3 });
+  // radio tower
+  const rt = addHouse({ id: "radio", name: "Радиовышка", x: 18800, y: 3950, w: 200, h: 160, door: "s", floor: "#2a2a28", roof: "#30302a" });
+  furn(rt, 20, 20, 110, 30, "shelf"); crate(rt, 150, 110);
+  inter({ type: "loot", x: rt.x + 60, y: rt.y + 110, r: 40, give: { battery: 2, parts: 1 }, label: "Ящик радиста" });
+  decor("tower", 19150, 4050, 0);
+  World.regions.push({ name: "Радиовышка", x: 19000, y: 4050, r: 600 });
+
+  World.roads.push(
+    [[12940, 12060], [13800, 12300], [14600, 12650], [15800, 12000], [16610, 11500]],
+    [[9560, 9640], [7500, 9300], [5160, 9420], [4800, 7000], [5140, 5140]],
+    [[9380, 13000], [9000, 14000], [7600, 14400], [6600, 14430]],
+    [[9380, 13000], [10200, 15000], [11000, 16760]],
+    [[11500, 9700], [12400, 8200], [12100, 6200], [11600, 5450]],
+    [[12400, 8200], [15000, 6300], [18900, 4150]],
+    [[18900, 4150], [19500, 7000], [18450, 10900], [18450, 11280]],
+  );
+  // abandoned houses along the roads
+  const along = [];
+  for (const r of World.roads) for (let i = 0; i < r.length - 1; i++) along.push([r[i], r[i + 1]]);
+  let n = 0;
+  for (let tries = 0; tries < 400 && n < 14; tries++) {
+    const [a, b] = along[Math.floor(rnd() * along.length)], t = rnd();
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 800) continue;
+    const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, side = rnd() < 0.5 ? 1 : -1;
+    const x = a[0] + (b[0] - a[0]) * t - uy * side * 260 - 120, y = a[1] + (b[1] - a[1]) * t + ux * side * 260 - 90;
+    if (x < 300 || y < 300 || x > World.W - 600 || y > World.H - 600) continue;
+    if (World.houses.some(h => x < h.x + h.w + 400 && x + 300 > h.x - 400 && y < h.y + h.h + 400 && y + 260 > h.y - 400)) continue;
+    if (World.swamp.some(sw => dist2(x + 120, y + 90, sw.x, sw.y) < (sw.r + 260) ** 2)) continue;
+    if (distToRoad(x + 120, y + 90) < 150) continue;
+    cabin(rnd, x, y, "Заброшенный дом", "cabin" + n); n++;
+  }
+}
+
+// smooth noise in [0,1] for forests and clearings
+function valueNoise(seed, cell) {
+  const r = mulberry32(seed), N = 64, g = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) g[i] = r();
+  return (x, y) => {
+    const fx = x / cell, fy = y / cell, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+    const v = (a, b) => g[((b % N + N) % N) * N + ((a % N + N) % N)];
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return lerp(lerp(v(ix, iy), v(ix + 1, iy), sx), lerp(v(ix, iy + 1), v(ix + 1, iy + 1), sx), sy);
+  };
+}
+
+function regionAt(x, y) {
+  let best = null, bd = 1e18;
+  for (const r of World.regions) { const d = dist2(x, y, r.x, r.y); if (d < r.r * r.r && d < bd) { bd = d; best = r; } }
+  return best;
+}
+
+function buildBigWorld(rnd) {
+  World.composing = true;
+  region(buildCamp, rnd, 16500, 9500);
+  region(buildForest, rnd, 9000, 9000);
+  region(buildSwamp, rnd, 1500, 1500);
+  World.composing = false;
+  World.regions.push(
+    { name: "Чёрная Сосна", x: 11100, y: 11300, r: 2300 },
+    { name: "Пионерлагерь «Зорька»", x: 18400, y: 11300, r: 2000, spawn: MAPS.camp.spawn, fog: 1.15 },
+    { name: "Гнилые топи", x: 3500, y: 3500, r: 2500, spawn: MAPS.swamp.spawn, fog: 1.6, dead: 0.65 },
+  );
+  buildPOIs(rnd);
+  World.style = { base: "#1c2416", road: "dirt" };
+  World.start = { x: 9430, y: 12800 };
+  // nature: forests where the noise says so, open fields elsewhere
+  const forest = valueNoise(77, 2600), detail = valueNoise(78, 700);
+  const okSpot = (x, y, near) => {
+    if (x < 60 || y < 60 || x > World.W - 60 || y > World.H - 60) return false;
+    if (insideHouse(x, y, 90)) return false;
+    if (distToRoad(x, y) < 60) return false;
+    for (const k of World.keep) if (dist2(x, y, k.x, k.y) < k.r * k.r) return false;
+    for (const e of World.exits) if (dist2(x, y, e.x, e.y) < 130 * 130) return false;
+    for (const c of World.clear) if (x > c.x0 && x < c.x1 && y > c.y0 && y < c.y1 && rnd() < 0.85) return false;
+    for (const sw of World.swamp) if (dist2(x, y, sw.x, sw.y) < (sw.r + 10) ** 2) return false;
+    for (const q of gridQuery(x, y, near)) if (dist2(x, y, q.x, q.y) < (near + q.r) ** 2 * 0.5) return false;
+    return true;
+  };
+  const dens = (x, y) => clamp((forest(x, y) * 0.75 + detail(x, y) * 0.35) * 1.5 - 0.35, 0, 1);
+  const place = (n, fn, wantDense) => { let k = 0; for (let tries = 0; k < n && tries < n * 14; tries++) { const x = rnd() * World.W, y = rnd() * World.H; const d = dens(x, y); if (wantDense && rnd() > d) continue; if (!wantDense && rnd() < d * 0.5) continue; if (fn(x, y)) k++; } };
+  place(9500, (x, y) => {
+    if (!okSpot(x, y, 40)) return null;
+    const reg = regionAt(x, y), dead = rnd() < (reg && reg.dead ? reg.dead : 0.12);
+    const birch = !dead && rnd() < 0.18;
+    return addRes({ type: "tree", x, y, r: birch ? 7 + rnd() * 3 : 9 + rnd() * 6, cr: dead ? 0 : 36 + rnd() * 26, dead, birch, left: 4, max: 4, hue: rnd(), regrow: 0, block: true });
+  }, true);
+  place(1500, (x, y) => okSpot(x, y, 50) && addRes({ type: "rock", x, y, r: 14 + rnd() * 14, left: 4, max: 4, regrow: 0, block: true, sh: rnd() }), false);
+  place(2600, (x, y) => okSpot(x, y, 30) && addRes({ type: "bush", x, y, r: 14, left: 2, max: 2, regrow: 0, block: false, sh: rnd() }), true);
+  place(170, (x, y) => okSpot(x, y, 60) && addRes({ type: "scrap", x, y, r: 18, left: 5, max: 5, regrow: 0, block: true, sh: rnd() }), false);
+  // wrecked cars along the roads give car parts
+  for (let i = 0, tries = 0; i < 26 && tries < 400; tries++) {
+    const r = World.roads[Math.floor(rnd() * World.roads.length)], j = Math.floor(rnd() * (r.length - 1)), t = rnd();
+    const x = r[j][0] + (r[j + 1][0] - r[j][0]) * t + (rnd() - 0.5) * 160, y = r[j][1] + (r[j + 1][1] - r[j][1]) * t + (rnd() - 0.5) * 160;
+    if (distToRoad(x, y) < 50 || insideHouse(x, y, 60)) continue;
+    addRes({ type: "scrap", car: true, x, y, r: 30, left: 6, max: 6, regrow: 0, block: true, sh: rnd() }); i++;
+  }
+  for (let i = 0; i < 14000; i++) World.props.push({ x: rnd() * World.W, y: rnd() * World.H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
+  World.horror = { effigy: 120, hanged: 30, bones: 70, blood: 120, doll: 14, totem: 18 };
+  scatterHorror(rnd, World.horror);
+}
+
 function generateWorld(seed, mapId = "forest") {
   const base = { forest: 0, camp: 101, swamp: 202, catacombs: 303, mine: 404, bunker: 505 }[mapId] || 0;
   const rnd = mulberry32(seed + base);
-  Object.assign(World, { map: mapId, indoor: MAPS[mapId].kind === "dungeon", houses: [], walls: [], furn: [], res: [], stones: [], swamp: [], props: [], inter: [], lights: [],
-    roads: [], exits: [], decor: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null });
-  World.gw = Math.ceil(WORLD_W / World.gcell); World.gh = Math.ceil(WORLD_H / World.gcell);
+  const big = mapId === "forest";
+  Object.assign(World, { map: mapId, indoor: MAPS[mapId].kind === "dungeon", W: big ? 24000 : 4000, H: big ? 24000 : 4000,
+    houses: [], walls: [], furn: [], res: [], stones: [], swamp: [], props: [], inter: [], lights: [],
+    roads: [], exits: [], decor: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null, regions: [], carStart: null, composing: false });
+  World.gw = Math.ceil(World.W / World.gcell); World.gh = Math.ceil(World.H / World.gcell);
   World.grid = Array.from({ length: World.gw * World.gh }, () => []);
-  if (mapId === "forest") buildForest(rnd);
-  else if (mapId === "camp") buildCamp(rnd);
-  else if (mapId === "swamp") buildSwamp(rnd);
+  if (big) buildBigWorld(rnd);
   else buildDungeon(rnd, mapId);
+  // final spatial grids
+  World.grid = Array.from({ length: World.gw * World.gh }, () => []);
+  World.res.forEach(gridAdd);
   World.stones.forEach(gridAdd);
+  rebuildRects();
   buildNav();
   // in a dungeon everything that is not carved floor is solid rock
   if (World.dungeon) {
@@ -458,17 +640,42 @@ function circleRect(cx, cy, r, R) {
   if (m === t) return { x: 0, y: -(t + r) }; return { x: 0, y: b + r };
 }
 
-const _q = [];
+// rectangles (walls, furniture, structures) in a coarse grid so lookups stay cheap on a huge map
+let _rstamp = 1;
+function rebuildRects() {
+  const c = World.rcell;
+  World.rw = Math.ceil(World.W / c); World.rh = Math.ceil(World.H / c);
+  World.rgrid = Array.from({ length: World.rw * World.rh }, () => []);
+  for (const R of World.walls) { R.wall = true; rectAdd(R); }
+  for (const R of World.furn) rectAdd(R);
+}
+function rectAdd(R) {
+  const c = World.rcell;
+  const x0 = clamp(Math.floor(R.x / c), 0, World.rw - 1), x1 = clamp(Math.floor((R.x + R.w) / c), 0, World.rw - 1);
+  const y0 = clamp(Math.floor(R.y / c), 0, World.rh - 1), y1 = clamp(Math.floor((R.y + R.h) / c), 0, World.rh - 1);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) World.rgrid[y * World.rw + x].push(R);
+}
+function rectRemove(R) {
+  for (const cell of World.rgrid) { const i = cell.indexOf(R); if (i >= 0) cell.splice(i, 1); }
+}
+function rectsIn(x0, y0, x1, y1, out = []) {
+  const c = World.rcell, st = ++_rstamp;
+  const cx0 = clamp(Math.floor(x0 / c), 0, World.rw - 1), cx1 = clamp(Math.floor(x1 / c), 0, World.rw - 1);
+  const cy0 = clamp(Math.floor(y0 / c), 0, World.rh - 1), cy1 = clamp(Math.floor(y1 / c), 0, World.rh - 1);
+  for (let y = cy0; y <= cy1; y++) for (let x = cx0; x <= cx1; x++) for (const R of World.rgrid[y * World.rw + x]) { if (R._st === st) continue; R._st = st; out.push(R); }
+  return out;
+}
+
+const _q = [], _rq = [];
 function collide(e) {
   // push entity circle out of walls, furniture and solid round things
   for (let it = 0; it < 2; it++) {
-    for (const R of World.walls) {
+    _rq.length = 0; rectsIn(e.x - e.r - 2, e.y - e.r - 2, e.x + e.r + 2, e.y + e.r + 2, _rq);
+    for (const R of _rq) {
+      if (R.gate && e.isPlayer) continue;
+      if (R.soft) continue;
       if (e.x + e.r < R.x || e.x - e.r > R.x + R.w || e.y + e.r < R.y || e.y - e.r > R.y + R.h) continue;
-      const p = circleRect(e.x, e.y, e.r, R); if (p) { e.x += p.x; e.y += p.y; }
-    }
-    for (const R of World.furn) {
-      if (e.x + e.r < R.x || e.x - e.r > R.x + R.w || e.y + e.r < R.y || e.y - e.r > R.y + R.h) continue;
-      const p = circleRect(e.x, e.y, e.r, R); if (p) { e.x += p.x; e.y += p.y; }
+      const p = circleRect(e.x, e.y, e.r, R); if (p) { e.x += p.x; e.y += p.y; if (R.build) e.hitBuild = R; }
     }
     _q.length = 0; gridQuery(e.x, e.y, e.r + 30, _q);
     for (const o of _q) {
@@ -478,7 +685,7 @@ function collide(e) {
       if (d < rr * rr && d > 1e-6) { const l = Math.sqrt(d); e.x += dx / l * (rr - l); e.y += dy / l * (rr - l); }
     }
   }
-  e.x = clamp(e.x, 20, WORLD_W - 20); e.y = clamp(e.y, 20, WORLD_H - 20);
+  e.x = clamp(e.x, 20, World.W - 20); e.y = clamp(e.y, 20, World.H - 20);
 }
 
 function inSwamp(x, y) {
@@ -508,7 +715,7 @@ function rayCircle(ox, oy, dx, dy, cx, cy, r, maxT) {
 
 // blockers near a point, cached by the caller for a frame
 function nearBlockers(x, y, rad) {
-  const rects = World.walls.filter(R => R.x < x + rad && R.x + R.w > x - rad && R.y < y + rad && R.y + R.h > y - rad);
+  const rects = rectsIn(x - rad, y - rad, x + rad, y + rad).filter(R => R.wall);
   const circles = gridQuery(x, y, rad).filter(o => o.block && (o.type === "tree" || o.type === "stone" || o.type === "rock"));
   return { rects, circles };
 }
@@ -525,7 +732,8 @@ function wallBetween(ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy);
   if (l < 1) return false;
   const ux = dx / l, uy = dy / l;
-  for (const R of World.walls) {
+  for (const R of rectsIn(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by))) {
+    if (!R.wall) continue;
     if (Math.max(ax, bx) < R.x || Math.min(ax, bx) > R.x + R.w || Math.max(ay, by) < R.y || Math.min(ay, by) > R.y + R.h) continue;
     if (rayRect(ax, ay, ux, uy, R, l) < l) return true;
   }
@@ -536,10 +744,12 @@ function wallBetween(ax, ay, bx, by) {
 
 function buildNav() {
   const c = World.ncell;
-  World.nw = Math.ceil(WORLD_W / c); World.nh = Math.ceil(WORLD_H / c);
+  World.nw = Math.ceil(World.W / c); World.nh = Math.ceil(World.H / c);
   const n = World.nw * World.nh;
   World.nav = new Uint8Array(n);
-  World.flow = new Int32Array(n).fill(-1);
+  World.flow = new Int32Array(n);
+  World.fstamp = new Int32Array(n);
+  World.fcur = 1;
   const pad = 9;
   const markRect = R => {
     const x0 = Math.floor((R.x - pad) / c), x1 = Math.floor((R.x + R.w + pad) / c);
@@ -551,7 +761,7 @@ function buildNav() {
       }
   };
   World.walls.forEach(markRect);
-  World.furn.forEach(markRect);
+  World.furn.forEach(R => { if (!R.soft && !R.gate) markRect(R); else if (R.gate) markRect(R); });
   const markCircle = o => {
     const r = o.r + 4;
     const x0 = Math.floor((o.x - r) / c), x1 = Math.floor((o.x + r) / c), y0 = Math.floor((o.y - r) / c), y1 = Math.floor((o.y + r) / c);
@@ -564,23 +774,23 @@ function buildNav() {
 }
 
 const _bfsQ = new Int32Array(200 * 200);
+function flowAt(i) { return World.fstamp[i] === World.fcur ? World.flow[i] : -1; }
 function updateFlow(px, py, radiusCells = 46) {
   const c = World.ncell, W = World.nw, H = World.nh;
-  const flow = World.flow;
-  flow.fill(-1);
+  const flow = World.flow, st = World.fstamp, cur = ++World.fcur;
   let sx = clamp(Math.floor(px / c), 0, W - 1), sy = clamp(Math.floor(py / c), 0, H - 1);
   let head = 0, tail = 0;
   const s = sy * W + sx;
-  flow[s] = 0; _bfsQ[tail++] = s;
-  while (head < tail) {
+  flow[s] = 0; st[s] = cur; _bfsQ[tail++] = s;
+  while (head < tail && tail < _bfsQ.length - 4) {
     const i = _bfsQ[head++], x = i % W, y = (i / W) | 0, d = flow[i];
     if (Math.abs(x - sx) > radiusCells || Math.abs(y - sy) > radiusCells) continue;
     for (let k = 0; k < 4; k++) {
       const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const j = ny * W + nx;
-      if (flow[j] !== -1 || World.nav[j]) continue;
-      flow[j] = d + 1; _bfsQ[tail++] = j;
+      if (st[j] === cur || World.nav[j]) continue;
+      flow[j] = d + 1; st[j] = cur; _bfsQ[tail++] = j;
     }
   }
 }
@@ -589,13 +799,13 @@ function updateFlow(px, py, radiusCells = 46) {
 function flowDir(x, y) {
   const c = World.ncell, W = World.nw, H = World.nh;
   const cx = clamp(Math.floor(x / c), 0, W - 1), cy = clamp(Math.floor(y / c), 0, H - 1);
-  const here = World.flow[cy * W + cx];
+  const here = flowAt(cy * W + cx);
   let best = here === -1 ? 1e9 : here, bx = 0, by = 0;
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     if (!dx && !dy) continue;
     const nx = cx + dx, ny = cy + dy;
     if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-    const v = World.flow[ny * W + nx];
+    const v = flowAt(ny * W + nx);
     if (v === -1) continue;
     if (dx && dy && (World.nav[cy * W + nx] || World.nav[ny * W + cx])) continue; // no corner cutting
     if (v < best) { best = v; bx = dx; by = dy; }

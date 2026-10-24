@@ -1,7 +1,6 @@
 "use strict";
 // Static game data: weapons, monsters, recipes, loot and story text.
 
-const WORLD_W = 4000, WORLD_H = 4000;
 const DAY_LEN = 600; // seconds of real time per in-game day
 
 const ITEMS = {
@@ -23,6 +22,17 @@ const ITEMS = {
   molotov: { n: "Молотов",    icon: "🔥" },
   trap:    { n: "Капкан",     icon: "⚙" },
   campfire:{ n: "Костёр",     icon: "🔥" },
+  fuel:    { n: "Канистра бензина", icon: "⛽" },
+  parts:   { n: "Запчасти",   icon: "⚙" },
+  engine:  { n: "Двигатель",  icon: "🔧" },
+  rod:     { n: "Удочка",     icon: "🎣" },
+  fish:    { n: "Сырая рыба", icon: "🐟", food: 8 },
+  fishcooked: { n: "Жареная рыба", icon: "🍤", food: 35, hp: 5 },
+  veg:     { n: "Овощи",      icon: "🥔", food: 18 },
+  stew:    { n: "Рагу",       icon: "🍲", food: 55, hp: 15 },
+  canned:  { n: "Тушёнка",    icon: "🥫", food: 40 },
+  berries: { n: "Ягоды",      icon: "🫐", food: 6 },
+  seeds:   { n: "Семена",     icon: "🌱" },
 };
 
 // kind: melee | gun | bow | throw
@@ -60,26 +70,47 @@ const RECIPES = [
   { out: "medkit",   q: 1,  n: "Аптечка",       need: { cloth: 2, herb: 3 },               where: "any",   d: "+60 здоровья (H)" },
   { out: "tea",      q: 1,  n: "Травяной отвар", need: { herb: 3 },                        where: "any",   d: "+40 рассудка (G)" },
   { out: "molotov",  q: 1,  n: "Коктейль Молотова", need: { cloth: 1, spirit: 1 },         where: "any",   d: "Огонь — то, чего лес боится." },
+  { out: "rod",      q: 1,  n: "Удочка",        need: { wood: 3, cloth: 1, scrap: 1 },     where: "any",   d: "Рыбачить у любой воды." },
+  { out: "fishcooked", q: 1, n: "Жареная рыба", need: { fish: 1 },                         where: "fire",  d: "Нужен огонь: костёр или печь. +35 сытости." },
+  { out: "stew",     q: 1,  n: "Рагу",          need: { veg: 2, herb: 1 },                 where: "fire",  d: "Нужен огонь. +55 сытости, +15 здоровья." },
+  { out: "fuel",     q: 1,  n: "Самодельный бензин", need: { spirit: 2, powder: 1 },       where: "bench", d: "Канистра на 40 литров. Вонючий, но едет." },
+  { out: "engine",   q: 1,  n: "Двигатель",     need: { parts: 4, scrap: 6 },              where: "bench", d: "Собрать двигатель для машины. Запчасти — в разбитых машинах и мастерской." },
 ];
+
+// things you can build around your base (sizes in px; rot 0 = along x)
+const BUILDS = [
+  { k: "fence",  n: "Забор",         icon: "🪵", need: { wood: 3 },             w: 80, h: 12, hp: 140, d: "Держит тварей. Ставь как хочешь." },
+  { k: "wall",   n: "Каменная стена", icon: "🧱", need: { stone: 4, wood: 1 },  w: 80, h: 18, hp: 380, d: "Прочнее забора." },
+  { k: "gate",   n: "Калитка",       icon: "🚪", need: { wood: 5, scrap: 1 },   w: 70, h: 12, hp: 160, d: "Ты проходишь, твари — нет." },
+  { k: "spikes", n: "Колья",         icon: "▲", need: { wood: 4 },             w: 70, h: 30, hp: 120, soft: true, d: "Ранят и замедляют тварей." },
+  { k: "turret", n: "Турель",        icon: "🎯", need: { scrap: 8, powder: 2 }, w: 30, h: 30, hp: 200, d: "Сама стреляет по тварям. Заряди патронами 9мм (✋)." },
+  { k: "light",  n: "Прожектор",     icon: "💡", need: { scrap: 4, battery: 1 }, w: 20, h: 20, hp: 80, d: "Свет отпугивает слабых тварей и бережёт рассудок." },
+  { k: "stove",  n: "Печь",          icon: "♨", need: { stone: 6, scrap: 2 },  w: 40, h: 40, hp: 300, d: "Огонь для готовки и тепла." },
+  { k: "garden", n: "Грядка",        icon: "🌱", need: { wood: 3 },             w: 70, h: 46, hp: 60, soft: true, d: "Посади семена — через полдня будут овощи." },
+  { k: "bed",    n: "Кровать",       icon: "🛏", need: { wood: 4, cloth: 4 },   w: 34, h: 62, hp: 100, d: "Спать до утра и сохраняться." },
+  { k: "bench",  n: "Верстак",       icon: "🔨", need: { wood: 6, scrap: 2 },   w: 100, h: 40, hp: 150, d: "Крафт оружейных и сложных вещей." },
+];
+const BASE_R = 700;
 
 const CRATE_LOOT = [
   ["cloth", 0.55, 1, 3], ["powder", 0.3, 1, 2], ["spirit", 0.2, 1, 1], ["battery", 0.26, 1, 1],
   ["ammo9", 0.12, 2, 5], ["shells", 0.08, 1, 3], ["bolts", 0.08, 2, 4], ["bandage", 0.25, 1, 1], ["scrap", 0.35, 1, 2], ["herb", 0.2, 1, 2],
+  ["canned", 0.18, 1, 1], ["seeds", 0.12, 1, 2], ["fuel", 0.05, 1, 1], ["parts", 0.08, 1, 1],
 ];
 // chance that an ordinary crate hides a melee weapon the player does not have yet
 const CRATE_WEAPON_CHANCE = 0.035;
 
 // Locations. Outdoor maps connect through the forest; dungeons hang off the map they are entered from.
 const MAPS = {
-  forest:    { n: "Чёрная Сосна",            kind: "outdoor", wall: "wood",     fog: 1,    spawn: null },
+  forest:    { n: "Окрестности Чёрной Сосны", kind: "outdoor", wall: "wood",    fog: 1,    spawn: null },
   camp:      { n: "Пионерлагерь «Зорька»",   kind: "outdoor", wall: "wood",     fog: 1.15, spawn: { ghoul: 40, crawler: 25, stalker: 20, spitter: 10, brute: 5 } },
   swamp:     { n: "Гнилые топи",             kind: "outdoor", wall: "wood",     fog: 1.6,  spawn: { crawler: 35, spitter: 35, ghoul: 15, brute: 15 } },
   catacombs: { n: "Катакомбы под часовней",  kind: "dungeon", wall: "stone",    fog: 1,    spawn: { ghoul: 50, crawler: 35, stalker: 15 } },
   mine:      { n: "Старая шахта",            kind: "dungeon", wall: "rock",     fog: 1,    spawn: { crawler: 55, brute: 20, spitter: 25 } },
   bunker:    { n: "Военный бункер",          kind: "dungeon", wall: "concrete", fog: 1,    spawn: { ghoul: 40, stalker: 35, brute: 25 } },
 };
-const MAP_LINKS = { forest: ["camp", "swamp", "catacombs", "mine"], camp: ["forest", "bunker"], swamp: ["forest"], catacombs: ["forest"], mine: ["forest"], bunker: ["camp"] };
-const SEAL_MAP = { bone: "catacombs", heart: "camp", eye: "swamp" };
+const MAP_LINKS = { forest: ["catacombs", "mine", "bunker"], catacombs: ["forest"], mine: ["forest"], bunker: ["forest"] };
+const SEAL_MAP = { bone: "catacombs", heart: "forest", eye: "forest" };
 
 const INTRO = [
   "Октябрь.",

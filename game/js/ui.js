@@ -432,3 +432,20 @@ function boot() {
 }
 
 addEventListener("DOMContentLoaded", boot);
+
+// installable app: offline cache plus the browser's own install prompt
+let installPrompt = null;
+addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  installPrompt = e;
+  const b = $("#install");
+  if (b) b.hidden = false;
+});
+addEventListener("appinstalled", () => { installPrompt = null; const b = $("#install"); if (b) b.hidden = true; });
+addEventListener("DOMContentLoaded", () => {
+  const b = $("#install");
+  if (b) b.onclick = () => { if (!installPrompt) return; installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; b.hidden = true; }); };
+});
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  addEventListener("load", () => { navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {}); });
+}

@@ -570,6 +570,19 @@ addEventListener("DOMContentLoaded", () => {
   const b = $("#install");
   if (b) b.onclick = () => { if (!installPrompt) return; installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; b.hidden = true; }); };
 });
+// the build this code belongs to; if the site has a newer one, an old copy is stuck on this phone:
+// drop the game's offline cache and its worker, then load again (once per tab)
+const BUILD = 13;
+if (location.protocol === "https:" || location.hostname === "localhost") {
+  fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(v => {
+    let healed = null; try { healed = sessionStorage.getItem("bp.heal"); } catch (e) {}
+    if (!(v.build > BUILD) || healed) return;
+    try { sessionStorage.setItem("bp.heal", "1"); } catch (e) {}
+    const regs = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.filter(r => r.scope.includes("/game/")).map(r => r.unregister()))) : Promise.resolve();
+    regs.then(() => window.caches ? caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("blackpine-")).map(k => caches.delete(k)))) : null)
+      .then(() => { location.replace(location.pathname + "?v=" + v.build); });
+  }).catch(() => {});
+}
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   addEventListener("load", () => { navigator.serviceWorker.register("sw.js", { scope: "./" }).then(r => r.update()).catch(() => {}); });
   // when a new version takes over, reload once so the player sees it right away (not mid-game)

@@ -165,3 +165,4 @@ kbd { font: 12px ui-monospace, monospace; background: #222; border: 1px solid #4
 #t-heal { display: none; }
 #touch.lowhp #t-heal { display: grid; animation: healpulse 1s ease-in-out infinite; border-color: #e05040; }
 @keyframes healpulse { 50% { background: rgba(160,30,20,.55); } }
+.ver { opacity: .45; font-size: 11px; letter-spacing: .05em; }

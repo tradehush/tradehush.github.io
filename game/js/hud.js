@@ -140,6 +140,17 @@ function drawHUD(ctx) {
       }
     }
   }
+  // the Master's health while it fights you
+  {
+    const L = G.mons.find(m => m.type === "lord" && !m.dead);
+    if (L && !G.showMap && (L.state === "hunt" || L.barT > 0) && dist2(L.x, L.y, p.x, p.y) < 1100 * 1100) {
+      const bw = Math.min(W * 0.5, 320 * u), bx = W / 2 - bw / 2, by = pad + 30 * u, k = clamp(L.hp / (L.max || 1), 0, 1);
+      font(10); ctx.textAlign = "center"; ctx.fillStyle = "#e8b0a0"; ctx.fillText("ХОЗЯИН ЛЕСА", W / 2, by - 8 * u);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx - 2 * u, by - 2 * u, bw + 4 * u, 9 * u);
+      ctx.fillStyle = k < 0.35 ? "#ff3a1a" : "#a01810"; ctx.fillRect(bx, by, bw * k, 5 * u);
+      ctx.textAlign = "left";
+    }
+  }
   if (G.downT > 0) {
     ctx.fillStyle = "rgba(60,0,0,0.6)"; ctx.fillRect(0, 0, W, H);
     font(22); ctx.textAlign = "center"; ctx.fillStyle = "#e05040"; ctx.fillText("ТЫ ПОГИБ", W / 2, H * 0.4);
@@ -474,7 +485,10 @@ function drawRun(ctx) {
 }
 
 // the jump-scare face, drawn procedurally and shaking
+// several kinds of jump scares; each draws itself procedurally and shakes
 function drawScare(ctx) {
+  const st = G.scare.style || "face";
+  if (st !== "face") { drawScare2(ctx, st); return; }
   const sc = G.scare, W = R.W, H = R.H;
   const k = sc.t / sc.max, rnd = mulberry32(Math.floor(R.time * 30) + (sc.seed * 1000 | 0));
   ctx.save();
@@ -510,5 +524,60 @@ function drawScare(ctx) {
   // scanline glitch
   ctx.fillStyle = "rgba(255,255,255,0.08)";
   for (let i = 0; i < 12; i++) ctx.fillRect(0, rnd() * H, W, 2 + rnd() * 6);
+  ctx.globalAlpha = 1;
+}
+
+function drawScare2(ctx, st) {
+  const sc = G.scare, W = R.W, H = R.H, k = sc.t / sc.max, rnd = mulberry32(Math.floor(R.time * 30) + (sc.seed * 1000 | 0));
+  const S = Math.min(W, H) * (1 + (1 - k) * 0.6), cx = W / 2 + (rnd() - 0.5) * 50, cy = H / 2 + (rnd() - 0.5) * 50;
+  ctx.save(); ctx.globalAlpha = clamp(k * 3, 0, 1);
+  ctx.fillStyle = st === "static" ? "#111" : "rgba(0,0,0,0.92)"; ctx.fillRect(0, 0, W, H);
+  ctx.translate(cx, cy); ctx.rotate((rnd() - 0.5) * 0.2);
+  if (st === "girl") {
+    // a pale face behind wet black hair, one eye showing
+    ctx.fillStyle = "#c8c4bc"; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.24, S * 0.34, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#050505";
+    for (let i = 0; i < 26; i++) { const x = (i / 25 - 0.5) * S * 0.7; if (x > -S * 0.1 && x < S * 0.17) continue; ctx.fillRect(x, -S * 0.45, S * (0.02 + rnd() * 0.03), S * (0.75 + rnd() * 0.5)); }
+    for (let i = 0; i < 5; i++) ctx.fillRect(-S * 0.1 + i * S * 0.06, -S * 0.45, S * 0.025, S * (0.25 + rnd() * 0.2));
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(-S * 0.03, -S * 0.09, S * 0.035, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(S * 0.08, -S * 0.09, S * 0.04, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(S * 0.08 + (rnd() - 0.5) * 3, -S * 0.09, S * 0.008, 0, 7); ctx.fill();
+    ctx.fillStyle = "#3a0000"; ctx.fillRect(-S * 0.04, S * 0.16, S * 0.1, S * 0.03 + Math.sin(R.time * 40) * S * 0.01);
+  } else if (st === "hands") {
+    // pale hands slap the screen from every side
+    ctx.fillStyle = "#b0a898"; ctx.strokeStyle = "rgba(60,0,0,0.7)"; ctx.lineWidth = S * 0.006;
+    for (let i = 0; i < 9; i++) {
+      ctx.save(); ctx.translate((rnd() - 0.5) * W * 0.9, (rnd() - 0.5) * H * 0.9); ctx.rotate(rnd() * 6.28); const s2 = S * (0.12 + rnd() * 0.08);
+      ctx.beginPath(); ctx.ellipse(0, 0, s2 * 0.5, s2 * 0.6, 0, 0, 7); ctx.fill(); ctx.stroke();
+      for (let f = 0; f < 5; f++) { ctx.save(); ctx.rotate(-0.9 + f * 0.45); ctx.fillRect(-s2 * 0.07, -s2 * 1.35, s2 * 0.14, s2 * 0.8); ctx.restore(); }
+      ctx.restore();
+    }
+    ctx.fillStyle = "rgba(120,0,0,0.35)"; ctx.fillRect(-W, -H, W * 2, H * 2);
+  } else if (st === "eye") {
+    // one huge bloodshot eye, the pupil twitching
+    ctx.fillStyle = "#e8e0d0"; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.5, S * 0.26, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = "rgba(170,10,10,0.7)"; ctx.lineWidth = S * 0.004;
+    for (let i = 0; i < 30; i++) { const a = rnd() * 6.28; ctx.beginPath(); ctx.moveTo(Math.cos(a) * S * 0.45, Math.sin(a) * S * 0.22); ctx.lineTo(Math.cos(a) * S * 0.18, Math.sin(a) * S * 0.12); ctx.stroke(); }
+    const px = (rnd() - 0.5) * S * 0.05;
+    ctx.fillStyle = "#5a1a10"; ctx.beginPath(); ctx.arc(px, 0, S * 0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(px, 0, S * (0.05 + 0.03 * Math.sin(R.time * 30)), 0, 7); ctx.fill();
+  } else if (st === "upside") {
+    // a grinning face hanging upside down from the top of the screen
+    ctx.rotate(Math.PI); ctx.translate(0, S * 0.1);
+    ctx.fillStyle = "#8a8070"; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.3, S * 0.42, 0, 0, 7); ctx.fill();
+    for (const sd of [-1, 1]) { ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(sd * S * 0.11, -S * 0.1, S * 0.07, S * 0.05, 0, 0, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(sd * S * 0.11, -S * 0.1, S * 0.01, 0, 7); ctx.fill(); }
+    ctx.fillStyle = "#0a0000"; ctx.beginPath(); ctx.ellipse(0, S * 0.17, S * 0.2, S * 0.06, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = "#d8ceb0"; for (let i = -6; i <= 6; i++) ctx.fillRect(i * S * 0.028 - S * 0.008, S * 0.17, S * 0.016, S * 0.03);
+  } else if (st === "static") {
+    // a television full of snow and a face surfacing in it
+    for (let i = 0; i < 900; i++) { const v = rnd() * 255 | 0; ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect((rnd() - 0.5) * W, (rnd() - 0.5) * H, 4, 3); }
+    ctx.globalAlpha = 0.75 * clamp(k * 3, 0, 1);
+    ctx.fillStyle = "#222"; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.25, S * 0.33, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.arc(sd * S * 0.09, -S * 0.08, S * 0.03, 0, 7); ctx.fill(); }
+    ctx.fillRect(-S * 0.08, S * 0.12, S * 0.16, S * 0.02);
+  }
+  ctx.restore();
+  ctx.fillStyle = "rgba(255,255,255,0.07)";
+  for (let i = 0; i < 10; i++) ctx.fillRect(0, rnd() * H, W, 2 + rnd() * 5);
   ctx.globalAlpha = 1;
 }

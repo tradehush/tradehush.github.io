@@ -600,7 +600,7 @@ addEventListener("DOMContentLoaded", () => {
 });
 // the build this code belongs to; if the site has a newer one, an old copy is stuck on this phone:
 // drop the game's offline cache and its worker, then load again (once per tab)
-const BUILD = 14;
+const BUILD = 15;
 if (location.protocol === "https:" || location.hostname === "localhost") {
   fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(v => {
     let healed = null; try { healed = sessionStorage.getItem("bp.heal"); } catch (e) {}

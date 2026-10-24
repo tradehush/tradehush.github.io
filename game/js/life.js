@@ -391,7 +391,7 @@ function updateRaid(dt) {
   const h = G.t * 24;
   if (h >= 0.5 && h < 3 && G.raidDay !== G.day) {
     G.raidDay = G.day;
-    const n = 3 + G.day * 2;
+    const n = 2 + G.day;
     for (let i = 0; i < n; i++) {
       const s = freeSpot(G.base.x, G.base.y, 800, 1100, false, false);
       if (!s) continue;

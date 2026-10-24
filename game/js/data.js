@@ -54,7 +54,7 @@ const MONSTERS = {
   brute:   { n: "Корявый",  hp: 260, speed: 58,  dmg: 32, r: 26, reach: 26, acd: 1.6, col: "#4a3b2c", eye: "#ff4010", drop: { fang: 1, scrap: 0.6 } },
   spitter: { n: "Плевун",   hp: 48,  speed: 74,  dmg: 12, r: 13, reach: 16, acd: 2.2, col: "#6b7340", eye: "#b6ff2a", drop: { fang: 0.4, herb: 0.5 }, ranged: true },
   stalker: { n: "Тень",     hp: 90,  speed: 175, dmg: 22, r: 14, reach: 20, acd: 0.9, col: "#0b0b0e", eye: "#e8f0ff", drop: { fang: 0.8, powder: 0.5 } },
-  lord:    { n: "Хозяин леса", hp: 99999, speed: 64, dmg: 42, r: 30, reach: 40, acd: 1.4, col: "#1e1812", eye: "#ff2a00", drop: {} },
+  lord:    { n: "Хозяин леса", hp: 2600, speed: 64, dmg: 42, r: 30, reach: 40, acd: 1.4, col: "#1e1812", eye: "#ff2a00", drop: {} },
   boss:    { n: "Хозяин леса", hp: 2200, speed: 72, dmg: 34, r: 40, reach: 34, acd: 1.3, col: "#2a2018", eye: "#ff1a00", drop: {} },
 };
 

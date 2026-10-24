@@ -1,6 +1,6 @@
 // Offline cache for the game. Online, files come from the network so updates show up at once;
 // offline, the last cached copy is used. Bump V when the file list changes.
-const V = "blackpine-14";
+const V = "blackpine-15";
 const FILES = ["./", "index.html", "style.css", "manifest.webmanifest", "vendor/three.min.js",
   "js/data.js", "js/audio.js", "js/world.js", "js/game.js", "js/life.js", "js/home.js", "js/boss.js", "js/net.js", "vendor/peerjs.min.js", "js/voice.js", "js/scene3d.js", "js/hud.js", "js/ui.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];

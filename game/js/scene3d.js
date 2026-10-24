@@ -559,8 +559,10 @@ function buildStatic() {
     else parts.push(box(d.x, DOOR_H + lh / 2, d.y, WT, lh, DOOR + 4, "#43342a"));
     // the door itself, swung open inwards, a porch step and windows on the other sides
     const inward = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[h.door], along = h.door === "s" || h.door === "n";
-    if (along) parts.push(box(d.x - DOOR / 2 + 3, DOOR_H / 2, d.y + inward[1] * DOOR * 0.45, 4, DOOR_H - 2, DOOR * 0.9, "#3a2a1c"));
-    else parts.push(box(d.x + inward[0] * DOOR * 0.45, DOOR_H / 2, d.y - DOOR / 2 + 3, DOOR * 0.9, DOOR_H - 2, 4, "#3a2a1c"));
+    if (h.ruin) {
+      if (along) parts.push(box(d.x - DOOR / 2 + 3, DOOR_H / 2, d.y + inward[1] * DOOR * 0.45, 4, DOOR_H - 2, DOOR * 0.9, "#3a2a1c"));
+      else parts.push(box(d.x + inward[0] * DOOR * 0.45, DOOR_H / 2, d.y - DOOR / 2 + 3, DOOR * 0.9, DOOR_H - 2, 4, "#3a2a1c"));
+    }
     if (along) parts.push(box(d.x, 3, d.y - inward[1] * 22, DOOR + 24, 6, 30, "#3a3026")); else parts.push(box(d.x - inward[0] * 22, 3, d.y, 30, 6, DOOR + 24, "#3a3026"));
     for (const side of ["n", "s", "e", "w"]) {
       if (side === h.door) continue;
@@ -696,6 +698,24 @@ function buildStatic() {
   const roofs = new THREE.Mesh(mergeParts(roofParts), lam(0xffffff, { vertexColors: true, side: THREE.DoubleSide, map: World.indoor ? V.tex.rock : V.tex.shingle }));
   roofs.castShadow = true; roofs.receiveShadow = true;
   s.add(roofs);
+
+  // doors: a leaf on a hinge, swinging inward when open
+  V.doors = [];
+  const doorMat = lam(0xffffff, { map: V.tex.wood }), knobMat = lam(0x8a7a50);
+  (World.doors || []).forEach((d, di) => {
+    const along = d.side === "s" || d.side === "n";
+    const pivot = new THREE.Group();
+    pivot.position.set(along ? d.x - DOOR / 2 + 2 : d.x, 0, along ? d.y : d.y - DOOR / 2 + 2);
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(along ? DOOR - 4 : 5, DOOR_H - 2, along ? 5 : DOOR - 4), doorMat);
+    leaf.material = doorMat; leaf.position.set(along ? (DOOR - 4) / 2 : 0, DOOR_H / 2, along ? 0 : (DOOR - 4) / 2);
+    leaf.castShadow = leaf.receiveShadow = true; pivot.add(leaf);
+    for (const sd of [-1, 1]) { const k = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 6), knobMat); k.position.set(along ? DOOR - 12 : sd * 4, 46, along ? sd * 4 : DOOR - 12); pivot.add(k); }
+    for (let i = 0; i < 2; i++) { const plank = new THREE.Mesh(new THREE.BoxGeometry(along ? DOOR - 10 : 6, 5, along ? 6 : DOOR - 10), lam(0x3a2a1c)); plank.position.set(along ? (DOOR - 4) / 2 : 0, 22 + i * 46, along ? 0 : (DOOR - 4) / 2); pivot.add(plank); }
+    const openA = { s: Math.PI / 2, n: -Math.PI / 2, e: -Math.PI / 2, w: Math.PI / 2 }[d.side] * 0.95;
+    pivot.rotation.y = d.open ? openA : 0;
+    s.add(pivot);
+    V.doors.push({ i: di, pivot, openA, leaf });
+  });
 
   // crates
   for (const o of World.inter) if (o.type === "crate") {
@@ -1185,6 +1205,13 @@ function syncCreepy(dt) {
       v.w.material.opacity = lit ? 0.8 : 0;
       v.w.visible = h.armed;
     }
+  }
+  // doors swing to where they should be; a broken one hangs crooked
+  for (const v of V.doors || []) {
+    const d = World.doors[v.i]; if (!d) continue;
+    const t = d.broken ? v.openA * 0.6 : d.open ? v.openA : 0;
+    v.pivot.rotation.y += (t - v.pivot.rotation.y) * Math.min(1, dt * 9);
+    v.pivot.rotation.z = d.broken ? 0.15 : 0;
   }
   // flames and tubes
   (V.lampMeshes || []).forEach(g => {

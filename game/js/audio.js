@@ -207,10 +207,12 @@ const Sound = (() => {
       tone(555 * pitch, 0.9, { type: "square", vol: vol * 0.25, freqEnd: 330 * pitch, attack: 0.03 });
       noise(0.8, { type: "bandpass", freq: 1800 * pitch, q: 3, vol: vol * 0.7, attack: 0.03 });
     },
-    screamer() {
-      noise(1.1, { type: "highpass", freq: 900, vol: 1, attack: 0.002 });
-      tone(880, 1, { type: "sawtooth", vol: 0.45, freqEnd: 1700, attack: 0.002 });
-      tone(933, 1, { type: "square", vol: 0.3, freqEnd: 1500, attack: 0.002 });
+    screamer(st) {
+      const f = { girl: 1250, hands: 420, eye: 640, upside: 1000, static: 330 }[st] || 880;
+      noise(1.1, { type: st === "static" ? "bandpass" : "highpass", freq: st === "static" ? 2500 : 900, vol: 1, attack: 0.002 });
+      tone(f, 1, { type: "sawtooth", vol: 0.45, freqEnd: f * (st === "hands" ? 0.6 : 1.9), attack: 0.002 });
+      tone(f * 1.06, 1, { type: "square", vol: 0.3, freqEnd: f * 1.7, attack: 0.002 });
+      if (st === "hands") for (let i = 0; i < 5; i++) noise(0.08, { type: "lowpass", freq: 600, vol: 0.8, when: i * 0.09 });
       tone(60, 0.8, { type: "sine", vol: 0.8, freqEnd: 30, attack: 0.002 });
     },
     thunder(delay = 0.5) {

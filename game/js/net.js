@@ -91,7 +91,7 @@ function netSnapshot() {
   const p = G.p, s = { t: "s", tm: +G.t.toFixed(5), day: G.day, wx: G.wx, so: G.stormOn,
     p: [Math.round(p.x), Math.round(p.y), +p.a.toFixed(2), +(p.pitch || 0).toFixed(2), G.owned[G.wi], p.light && G.lightOff <= 0 ? 1 : 0, Math.round(p.hp), Net.fireN, World.map, G.drive ? 1 : 0],
     m: [], pj: [], dr: [], fi: [], tr: [], pw: G.power, dp: G.drop, base: G.base };
-  for (const m of G.mons) if (!m.dead && !m.fake) s.m.push([m.id, m.type, Math.round(m.x), Math.round(m.y), +m.a.toFixed(2), Math.round(m.hp), m.state === "hunt" || m.state === "chase" ? 1 : m.state === "search" ? 2 : 0, m.wind > 0 ? 1 : 0, m.stun > 0 ? 1 : 0, m.type === "lord" && m.tgRemote ? 1 : 0]);
+  for (const m of G.mons) if (!m.dead && !m.fake) s.m.push([m.id, m.type, Math.round(m.x), Math.round(m.y), +m.a.toFixed(2), Math.round(m.hp), m.state === "hunt" || m.state === "chase" ? 1 : m.state === "search" ? 2 : 0, m.wind > 0 ? 1 : 0, m.stun > 0 ? 1 : 0, m.type === "lord" && m.tgRemote ? 1 : 0, Math.round(m.max)]);
   for (const pr of G.projs) if (pr.kind === "acid") s.pj.push([Math.round(pr.x), Math.round(pr.y), Math.round(pr.vx), Math.round(pr.vy)]);
   for (const d of G.drops) { if (!d.id) d.id = ++G.dropId; s.dr.push([d.id, Math.round(d.x), Math.round(d.y), d.item, d.q]); }
   for (const f of G.fires) s.fi.push([Math.round(f.x), Math.round(f.y), Math.round(f.life), f.hearth ? 1 : 0]);
@@ -119,11 +119,12 @@ function netApplySnap(s) {
   // creatures: keep the same objects so they animate smoothly
   const seen = new Set();
   Net.mons = Net.mons || new Map();
-  for (const [id, type, x, y, a, hp, st, wind, stun, tg] of s.m) {
+  for (const [id, type, x, y, a, hp, st, wind, stun, tg, mx] of s.m) {
     seen.add(id);
     let m = Net.mons.get(id);
     if (!m) { m = spawnMonster(type, x, y, { id, aggro: 0 }); Net.mons.set(id, m); }
-    m.tx = x; m.ty = y; m.ta = a; m.hp = hp; m.state = st === 1 ? (type === "lord" ? "hunt" : "chase") : st === 2 ? "search" : "wander"; m.wind = wind ? 0.2 : 0; m.stun = stun ? 0.2 : 0;
+    if (m.hp > hp) m.barT = 6;
+    m.tx = x; m.ty = y; m.ta = a; m.hp = hp; if (mx) m.max = mx; m.barT = Math.max(0, (m.barT || 0) - 0.1); m.state = st === 1 ? (type === "lord" ? "hunt" : "chase") : st === 2 ? "search" : "wander"; m.wind = wind ? 0.2 : 0; m.stun = stun ? 0.2 : 0;
     if (type === "lord") {
       if (tg && !m.tgMe) { G.lordAlert = 3; Sound.bossRoar(); setTimeout(() => Sound.sting(), 300); G.shake = Math.max(G.shake, 24); G.p.san = Math.max(0, G.p.san - 10); tip("lord", "Это Хозяин леса. Его не убить. Беги, прячься в доме без света, уходи из виду.", "⚠"); }
       if (!tg && m.tgMe) toast("Он потерял тебя…", 2.5);
@@ -212,6 +213,7 @@ function netOnData(d) {
     case "it": { const o = World.inter[d.i]; if (o) { o.full = d.f; o.taken = d.tk; if (d.day != null) o.day = d.day; } return; }
     case "hz": { const h = World.hazards[d.i]; if (h) h.armed = d.a; return; }
     case "b": netApplyBuilds(d.b); return;
+    case "door": { const dr = World.doors[d.i]; if (dr) { dr.hp = d.hp; dr.broken = d.b; setDoor(dr, d.o); } return; }
     case "fire": if (H) G.fires.push({ x: d.x, y: d.y, life: d.life || 240, hearth: !!d.h }); return;
     case "trap": if (H) G.traps.push({ x: d.x, y: d.y }); return;
     case "noise": if (H) makeNoise(d.x, d.y, d.r); return;
@@ -234,6 +236,7 @@ function netGuestStart(d) {
   generateWorld(d.seed, d.map);
   applyMap(d.m);
   netApplyBuilds(d.b || []);
+  if (d.m && d.m.doors) d.m.doors.forEach((v, i) => { const dr = World.doors[i]; if (dr) { setDoor(dr, v !== 1); dr.broken = v === 2; } });
   G.p.x = d.x + 40; G.p.y = d.y + 20; collide(G.p);
   G.tips = ["start", "gather", "claim"];
   if (typeof rebuildWorld3d === "function") rebuildWorld3d();
@@ -256,6 +259,7 @@ function netTick(dt) {
 function netRes(o) { if (!Net.on) return; const i = World.res.indexOf(o); if (i >= 0) netSend({ t: "res", i, l: o.left, rg: o.regrow || 0, bl: o.block ? 1 : 0 }); }
 function netInter(o) { if (!Net.on || !o) return; const i = World.inter.indexOf(o); if (i >= 0) netSend({ t: "it", i, f: o.full, tk: !!o.taken, day: o.day }); }
 function netHz(h) { if (!Net.on) return; const i = World.hazards.indexOf(h); if (i >= 0) netSend({ t: "hz", i, a: h.armed }); }
+function netDoor(d) { if (!Net.on) return; const i = World.doors.indexOf(d); if (i >= 0) netSend({ t: "door", i, o: d.open, hp: Math.round(d.hp), b: d.broken }); }
 function netBuildsChanged() { if (!Net.on) return; Net.bLock = 1.5; netSend({ t: "b", b: netBuilds() }); }
 function netDamage(m, dmg, kx, ky, fire) {
   const q = Net.dmgQ.get(m.id) || { d: 0, kx: 0, ky: 0, f: false };

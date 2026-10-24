@@ -57,6 +57,15 @@ function addHouse(h) {
   const dx = h.door === "w" ? x : h.door === "e" ? x + w : x + w / 2;
   const dy = h.door === "n" ? y : h.door === "s" ? y + hh : y + hh / 2;
   h.doorPos = { x: dx, y: dy };
+  // a real door that can be shut: a wall-like rect while closed
+  if (!h.ruin) {
+    const along = h.door === "s" || h.door === "n";
+    const R = along ? { x: dx - DOOR / 2, y: dy - WT / 2, w: DOOR, h: WT } : { x: dx - WT / 2, y: dy - DOOR / 2, w: WT, h: DOOR };
+    const door = { house: h.id, x: dx, y: dy, side: h.door, open: true, hp: 140, max: 140, broken: false, R, isDoor: true };
+    R.wall = true; R.build = door; R.doorRect = true;
+    World.doors.push(door); h.doorObj = door;
+    inter({ type: "door", door, x: dx, y: dy, r: 64, house: h.id });
+  }
   return h;
 }
 
@@ -458,6 +467,7 @@ function region(builder, rnd, dx, dy) {
   builder(rnd);
   for (const h of World.houses.slice(L.houses)) { h.x += dx; h.y += dy; h.doorPos.x += dx; h.doorPos.y += dy; }
   for (const k of ["walls", "furn"]) for (const R of World[k].slice(L[k])) { R.x += dx; R.y += dy; }
+  for (const h of World.houses.slice(L.houses)) if (h.doorObj) { const d = h.doorObj; d.x += dx; d.y += dy; d.R.x += dx; d.R.y += dy; }
   for (const o of World.inter.slice(L.inter)) { o.x += dx; o.y += dy; if (o.ax != null) { o.ax += dx; o.ay += dy; } }
   for (const k of ["lights", "swamp", "stones", "decor", "blood", "keep", "res"]) for (const o of World[k].slice(L[k])) { o.x += dx; o.y += dy; }
   for (const c of World.clear.slice(L.clear)) { c.x0 += dx; c.x1 += dx; c.y0 += dy; c.y1 += dy; }
@@ -767,7 +777,7 @@ function generateWorld(seed, mapId = "forest") {
   const big = mapId === "forest";
   Object.assign(World, { map: mapId, indoor: MAPS[mapId].kind === "dungeon", W: big ? 24000 : 4000, H: big ? 24000 : 4000,
     houses: [], walls: [], furn: [], res: [], stones: [], swamp: [], props: [], inter: [], lights: [],
-    roads: [], exits: [], decor: [], sgrid: null, wdecor: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null, regions: [], carStart: null, composing: false });
+    roads: [], exits: [], decor: [], sgrid: null, wdecor: [], doors: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null, regions: [], carStart: null, composing: false });
   World.gw = Math.ceil(World.W / World.gcell); World.gh = Math.ceil(World.H / World.gcell);
   World.grid = Array.from({ length: World.gw * World.gh }, () => []);
   if (big) buildBigWorld(rnd);
@@ -1002,4 +1012,19 @@ function flowDir(x, y) {
   if (!bx && !by) return null;
   const tx = (cx + bx) * c + c / 2 - x, ty = (cy + by) * c + c / 2 - y, l = Math.hypot(tx, ty) || 1;
   return { x: tx / l, y: ty / l };
+}
+
+// doors: shutting one puts its rect into collision, sight and the creatures' map
+function setDoor(door, open) {
+  if (door.open === open) return;
+  door.open = open;
+  if (open) {
+    rectRemove(door.R);
+    const c = World.ncell, R = door.R, pad = 9;
+    for (let y = Math.max(0, Math.floor((R.y - pad) / c)); y <= Math.min(World.nh - 1, Math.floor((R.y + R.h + pad) / c)); y++)
+      for (let x = Math.max(0, Math.floor((R.x - pad) / c)); x <= Math.min(World.nw - 1, Math.floor((R.x + R.w + pad) / c)); x++) {
+        const px = x * c + c / 2, py = y * c + c / 2;
+        if (!rectsIn(px - pad, py - pad, px + pad, py + pad).some(o => !o.soft && px > o.x - pad && px < o.x + o.w + pad && py > o.y - pad && py < o.y + o.h + pad)) World.nav[y * World.nw + x] = 0;
+      }
+  } else { rectAdd(door.R); markRectNav(door.R); }
 }

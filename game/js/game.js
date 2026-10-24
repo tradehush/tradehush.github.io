@@ -31,11 +31,13 @@ const K = (touch, key) => Input.touch ? touch : key;
 // jump scare: a face fills the screen with a scream
 function screamer(kind) {
   if (!Settings.scares || G.scareCd > 0 || G.state !== "play") return;
-  G.scare = { t: 0.8, max: 0.8, kind, seed: Math.random() };
-  G.scareCd = 35;
+  const STY = { mirror: "girl", door: "girl", tv: "static", lake: "hands", fridge: "hands", crate: "upside", behind: "face", stalker: "face", eye: "eye" };
+  const style = STY[kind] || ["face", "girl", "hands", "eye", "upside", "static"][Math.floor(Math.random() * 6)];
+  G.scare = { t: 0.85, max: 0.85, kind, style, seed: Math.random() };
+  G.scareCd = 30;
   G.shake = Math.max(G.shake, 22);
-  G.p.san = Math.max(0, G.p.san - 5);
-  Sound.screamer();
+  G.p.san = Math.max(0, G.p.san - 4);
+  Sound.screamer(style);
 }
 
 function toast(text, dur = 3.5) {
@@ -74,7 +76,7 @@ function newGame() {
     boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 20, figT: 70,
     storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
-  Object.assign(G, { car: makeCar(), base: null, builds: [], place: null, fishing: null, drive: false, lastStep: 0, objBanner: null, lastRegion: null, drop: null, nextDrop: 3, raidDay: 0, voiceCd: 0 });
+  Object.assign(G, { car: makeCar(), base: null, builds: [], place: null, fishing: null, drive: false, lastStep: 0, objBanner: null, lastRegion: null, drop: null, nextDrop: 3, raidDay: 0, voiceCd: 0, lordDead: 0, lordKills: 0 });
 }
 
 // what changes on a map (resources, crates, fires, traps) is kept per map while you are elsewhere
@@ -82,7 +84,7 @@ function snapMap() {
   const res = [];
   World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
   return { res, it: World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0)), hz: World.hazards.map(h => h.armed === false ? 1 : 0),
-    fires: G.fires, traps: G.traps, day: G.day, builds: G.builds.map(b => ({ k: b.k, x: b.x, y: b.y, rot: b.rot, hp: b.hp, ammo: b.ammo, plant: b.plant, grow: b.grow })) };
+    fires: G.fires, traps: G.traps, day: G.day, doors: World.doors.map(d => d.broken ? 2 : d.open ? 0 : 1), builds: G.builds.map(b => ({ k: b.k, x: b.x, y: b.y, rot: b.rot, hp: b.hp, ammo: b.ammo, plant: b.plant, grow: b.grow })) };
 }
 function applyMap(m) {
   if (!m) { G.builds = []; return; }
@@ -90,6 +92,7 @@ function applyMap(m) {
   (m.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
   (m.hz || []).forEach((f, i) => { if (f && World.hazards[i]) World.hazards[i].armed = false; });
   G.fires = m.fires || []; G.traps = m.traps || [];
+  (m.doors || []).forEach((v, i) => { const d = World.doors[i]; if (!d) return; if (v === 1) setDoor(d, false); if (v === 2) d.broken = true; });
   G.builds = (m.builds || []).map(b => Object.assign({}, b));
   registerBuilds();
   // days passed while away: things regrow and some crates fill up
@@ -107,7 +110,7 @@ function save() {
     const p = G.p;
     G.maps[World.map] = snapMap();
     const data = { v: 3, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive, drop: G.drop, nextDrop: G.nextDrop, raidDay: G.raidDay, quick: G.quick, power: G.power, wv: WORLD_V,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive, drop: G.drop, nextDrop: G.nextDrop, raidDay: G.raidDay, lordDead: G.lordDead || 0, lordKills: G.lordKills || 0, quick: G.quick, power: G.power, wv: WORLD_V,
       p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, food: p.food, light: p.light } };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
@@ -124,7 +127,7 @@ function load() {
   G.seed = d.seed;
   generateWorld(d.seed, d.map || "forest");
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map, drop: d.drop || null, nextDrop: d.nextDrop || 3, raidDay: d.raidDay || 0, quick: d.quick || ["bandage", null, null, null], power: d.power || {} });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map, drop: d.drop || null, nextDrop: d.nextDrop || 3, raidDay: d.raidDay || 0, lordDead: d.lordDead || 0, lordKills: d.lordKills || 0, quick: d.quick || ["bandage", null, null, null], power: d.power || {} });
   // the world layout changed since this save: keep builds and things, forget per-object states
   if (d.wv !== WORLD_V) for (const k in G.maps) { G.maps[k].res = []; G.maps[k].it = []; G.maps[k].hz = []; }
   if (G.drop && G.drop.landed && !G.drop.looted) placeDropCrate();
@@ -312,7 +315,7 @@ function blood(x, y, n = 6, col = "#5a0c0c") {
 
 function spawnMonster(type, x, y, extra = {}) {
   const d = MONSTERS[type];
-  const hpMul = type === "boss" ? 1 : 1 + (G.day - 1) * 0.12;
+  const hpMul = type === "boss" || type === "lord" ? 1 : 1 + (G.day - 1) * 0.07;
   const m = Object.assign({ type, x, y, r: d.r, hp: d.hp * hpMul, max: d.hp * hpMul, a: Math.random() * 6.28, state: "wander", aggro: 0,
     atkT: 0, wind: 0, stun: 0, kx: 0, ky: 0, hitF: 0, wx: x, wy: y, wT: 0, losT: 0, los: false, lit: false, beam: false,
     spitT: 2, sumT: 6, rootT: 8, darkT: 12, chargeT: 9, charge: 0, step: Math.random() * 10, growlT: 3 + Math.random() * 8, burn: 0 }, extra);
@@ -362,9 +365,9 @@ function spawnTick(dt) {
   if (G.spawnT > 0) return;
   const night = G.night > 0.5;
   // day is quiet, night is not
-  G.spawnT = World.indoor ? 7 : night ? Math.max(2, 3.6 - G.day * 0.25) : 20;
+  G.spawnT = World.indoor ? 10 : night ? Math.max(5, 8 - G.day * 0.3) : 28;
   const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss" && m.type !== "lord").length;
-  const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 2;
+  const cap = World.indoor ? 3 + Math.floor(G.day / 2) : night ? Math.min(3 + G.day, 8) : 1;
   if (free >= cap) return;
   // the very first minutes are calm
   if ((G.clock || 0) < 60 && !night) return;
@@ -386,11 +389,13 @@ function damage(m, dmg, kx = 0, ky = 0, fire = false) {
     return;
   }
   if (m.type === "lord") {
-    // it cannot be killed; a hard enough blow only staggers it for a moment
-    m.hitF = 0.12; spark(m.x, m.y, "#3a2a1a", 4, 80);
+    // thick hide: blows do little, fire and heavy shots do more; a hard blow staggers it for a moment
+    m.hitF = 0.12; m.barT = 6; spark(m.x, m.y, "#3a2a1a", 4, 80); blood(m.x, m.y, 3, "#2a0606");
+    m.hp -= dmg * (fire ? 0.9 : 0.55);
     if (dmg >= 20 && !(m.stunCd > G.clock)) { m.stun = 0.6; m.stunCd = G.clock + 4; }
     if (m.state !== "hunt" && dist2(m.x, m.y, G.p.x, G.p.y) < 1200 * 1200) { m.state = "hunt"; m.lastX = G.p.x; m.lastY = G.p.y; m.lostT = 0; lordSpotted(m); }
-    tip("lordhit", "Его не убить. Только задержать на миг. Беги!", "⚠");
+    tip("lordhit", "Его шкура толстая. Огонь, дробовик и арбалет бьют сильнее. Не стой рядом — бей и отходи.", "⚠");
+    if (m.hp <= 0) lordKilled(m);
     return;
   }
   let mul = 1;
@@ -453,11 +458,32 @@ function surfaceAt(x, y) {
   return "grass";
 }
 
+// doors: shut them against the night; creatures try to break them, a broken door needs wood
+function useDoor(d) {
+  const p = G.p;
+  if (d.broken) {
+    if (!(G.inv.wood >= 2)) { toast("Нужно 2 дерева", 1.6); return; }
+    G.inv.wood -= 2; d.broken = false; d.hp = d.max; Sound.chop(); toast("Дверь починена", 1.5);
+  } else if (d.open) {
+    if (circleRect(p.x, p.y, p.r + 2, d.R) || G.mons.some(m => !m.dead && circleRect(m.x, m.y, m.r, d.R))) { toast("В проёме кто-то стоит", 1.4); return; }
+    setDoor(d, false); Sound.knock(0); tip("door", "Закрытая дверь держит тварей снаружи, но они будут ломиться. Сильные выбивают быстрее.", "🚪");
+  } else { setDoor(d, true); Sound.switchClick(); Sound.stepOn("wood"); if (G.night > 0.55 && Math.random() < 0.06) setTimeout(() => screamer("door"), 300); }
+  netDoor(d);
+}
+function damageDoor(d, dmg) {
+  if (d.open || d.broken) return;
+  d.hp -= dmg; Sound.at(d.x, d.y, () => Sound.knock(0)); spark(d.x, d.y, "#8a6a40", 4, 90); G.shake = Math.max(G.shake, dist2(d.x, d.y, G.p.x, G.p.y) < 300 * 300 ? 3 : 0);
+  if (d.hp <= 0) { d.broken = true; setDoor(d, true); Sound.at(d.x, d.y, Sound.carHit); toast("Дверь выбита!", 2); }
+  netDoor(d);
+}
+
 function hurt(dmg, src) {
   const p = G.p;
   if (p.iframe > 0 || G.state !== "play") return;
   if (G.drive) { G.car.hp -= dmg * 0.6; dmg *= 0.35; }
-  p.hp -= dmg; p.iframe = 0.45; p.san = Math.max(0, p.san - dmg * 0.25);
+  if (src && src.type) dmg *= 0.6;
+  p.calmT = 0;
+  p.hp -= dmg; p.iframe = 0.6; p.san = Math.max(0, p.san - dmg * 0.12);
   G.shake = Math.max(G.shake, 8); G.hurtFlash = 0.5;
   Sound.hurt(); blood(p.x, p.y, 6);
   if (src && src.type) {
@@ -528,6 +554,11 @@ function updateMonsters(dt) {
         const bx = G.base.x - m.x, by = G.base.y - m.y, bl = Math.hypot(bx, by) || 1;
         dir = bl > 60 ? { x: bx / bl, y: by / bl } : { x: 0, y: 0 };
       }
+      else if (!m.los && (() => { const h = insideHouse(p.x, p.y); return h && h.doorObj && !h.doorObj.open && !insideHouse(m.x, m.y); })()) {
+        const h = insideHouse(p.x, p.y), dd = h.doorObj, out = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[dd.side];
+        const gx = dd.x + out[0] * 10, gy = dd.y + out[1] * 10, gl = Math.hypot(gx - m.x, gy - m.y) || 1;
+        dir = { x: (gx - m.x) / gl, y: (gy - m.y) / gl };
+      }
       else if (m.los || remoteTg) dir = { x: dx / d, y: dy / d };
       else dir = flowDir(m.x, m.y) || { x: dx / d, y: dy / d };
       if (m.type === "spitter" && m.los) {
@@ -586,7 +617,7 @@ function updateMonsters(dt) {
     collide(m);
     if (m.hitBuild && m.state === "chase" && !m.fake) {
       m.bT = (m.bT || 0) - dt;
-      if (m.bT <= 0) { m.bT = def.acd; m.wind = 0.3; damageBuild(m.hitBuild.build, def.dmg * (m.type === "brute" ? 2 : 1)); }
+      if (m.bT <= 0) { m.bT = def.acd; m.wind = 0.3; const hb = m.hitBuild.build; if (hb && hb.isDoor) damageDoor(hb, def.dmg * (m.type === "brute" ? 2.5 : 0.8)); else damageBuild(hb, def.dmg * (m.type === "brute" ? 2 : 1)); }
     }
     m.step += Math.hypot(m.x - ox, m.y - oy) * 0.08;
     // footsteps you can place in the dark
@@ -766,7 +797,7 @@ function findInteract() {
     if (o.type === "seal" && (!STORY_MODE || G.seals.includes(o.seal))) continue;
     if (o.type === "altar" && !STORY_MODE) continue;
     const d = Math.hypot(o.x - fx, o.y - fy);
-    if (d < o.r && d < bd && !wallBetween(p.x, p.y, o.x, o.y)) { bd = d - 10; best = o; }
+    if (d < o.r && d < bd && (o.type === "door" || !wallBetween(p.x, p.y, o.x, o.y))) { bd = d - (o.type === "door" ? 4 : 10); best = o; }
   }
   for (const o of gridQuery(p.x, p.y, 70)) {
     if (!GATHER[o.type] || o.left <= 0) continue;
@@ -798,6 +829,7 @@ function interactLabel(o) {
     case "altar": return G.placed ? "Алтарь" : "Положить печати на алтарь";
     case "car": { const c = G.car; return c.trunk ? "Обыскать багажник" : !c.engine ? (G.inv.engine ? "Поставить двигатель" : "Машина: нет двигателя") : c.fuel < 1 ? (G.inv.fuel ? "Залить бензин" : "Машина: пустой бак") : "Сесть за руль"; }
   }
+  if (o.type === "door") { const d = o.door; return d.broken ? "Починить дверь (2 🪵)" : d.open ? "Закрыть дверь" : "Открыть дверь"; }
   return homeLabel(o);
 }
 const HOME_TYPES = new Set(["switch", "generator", "fireplace", "sofa", "radio", "fridge", "medcab", "bookcase", "tv", "piano", "mirror"]);
@@ -811,11 +843,13 @@ function doInteract(o) {
 function doInteract0(o) {
   const p = G.p;
   if (HOME_TYPES.has(o.type)) { homeUse(o); return; }
+  if (o.type === "door") { useDoor(o.door); return; }
   switch (o.type) {
     case "note": UI.showNote(o.key); return;
     case "crate":
       if (!o.full) { toast("Пусто. Может, завтра что-то появится…", 2); return; }
       o.full = false; Sound.pickup();
+      if (G.night > 0.55 && Math.random() < 0.05) setTimeout(() => screamer("crate"), 250);
       let got = 0;
       for (const [k, ch, a, b] of CRATE_LOOT) if (Math.random() < ch) { addItem(k, a + Math.floor(Math.random() * (b - a + 1))); got++; }
       if (!got) addItem("cloth", 1);
@@ -1199,6 +1233,12 @@ function update(dt) {
   for (const m of G.mons) if (!m.fake && (m.type === "stalker" || m.type === "boss" || m.type === "lord")) near = Math.max(near, 1 - Math.hypot(m.x - p.x, m.y - p.y) / 480);
   G.interf = clamp(near, 0, 1);
   G.scareCd = Math.max(0, G.scareCd - dt);
+  {
+    const turn = Math.abs(angDiff(G.lastA == null ? p.a : G.lastA, p.a)) / Math.max(dt, 1e-3); G.lastA = p.a;
+    if (turn > 7 && (G.night > 0.55 || World.indoor) && p.san < 70 && Math.random() < 0.04) screamer("behind");
+    // the longer the dark lasts, the more likely something leaps out of it
+    if ((G.night > 0.6 || World.indoor) && p.san < 55 && Math.random() < dt / 200) screamer("dark");
+  }
   G.spotCd = Math.max(0, G.spotCd - dt);
   if (G.scare) { G.scare.t -= dt; if (G.scare.t <= 0) G.scare = null; }
   if (G.tip) { G.tip.t -= dt; if (G.tip.t <= 0) G.tip = null; }
@@ -1318,7 +1358,9 @@ function update(dt) {
   if (!inp.interact) inp.interactUsed = false;
 
   // hunger: about a day and a half from full to empty
-  p.food = Math.max(0, (p.food == null ? 100 : p.food) - dt * 100 / (DAY_LEN * 1.5));
+  p.food = Math.max(0, (p.food == null ? 100 : p.food) - dt * 100 / (DAY_LEN * 2.5));
+  p.calmT = (p.calmT || 0) + dt;
+  if (p.food > 40 && p.calmT > 6 && p.hp > 0 && p.hp < 100 && !(G.downT > 0)) p.hp = Math.min(100, p.hp + 0.7 * dt);
   if (p.food <= 0) { p.hp -= 0.6 * dt; if (p.hp <= 0) { p.hp = 0; die(); return; } }
   if (p.food < 30) tip("hunger", "Ты голоден. Ешь: рыба, овощи с грядки, тушёнка из ящиков. Готовь на костре или печи.", "🍖");
   // regions announce themselves
@@ -1332,21 +1374,22 @@ function update(dt) {
   // sanity
   const lightHere = Math.max(1 - G.night, nearFire(p.x, p.y, 240) ? 1 : 0, World.lights.some(l => lightOn(l) && dist2(p.x, p.y, l.x, l.y) < l.r * l.r) ? 0.8 : 0, p.light && G.lightOff <= 0 ? 0.45 : 0);
   let dsan = 0;
-  if (lightHere < 0.3) dsan -= 1.1; else if (lightHere < 0.6) dsan -= 0.35 * G.night;
-  if (nearFire(p.x, p.y, 240)) dsan += 2.2;
-  else if (G.night < 0.3) dsan += 0.3;
+  if (lightHere < 0.3) dsan -= 0.45; else if (lightHere < 0.6) dsan -= 0.12 * G.night;
+  if (nearFire(p.x, p.y, 240)) dsan += 3;
+  else if (G.night < 0.3) dsan += 0.8;
+  else if (G.inside && lightHere >= 0.6) dsan += 0.6;
   let seen = 0;
   for (const m of G.mons) if (!m.dead && m.beam && !m.fake && dist2(m.x, m.y, p.x, p.y) < 420 * 420) seen += m.type === "boss" ? 3 : m.type === "stalker" || m.type === "brute" ? 1.5 : 0.6;
-  dsan -= Math.min(2, seen);
+  dsan -= Math.min(0.9, seen * 0.45);
   if (G.boss && !G.bossDead) dsan -= 0.6;
   p.san = clamp(p.san + dsan * dt, 0, 100);
-  if (p.san <= 0) { p.hp -= 1.5 * dt; if (p.hp <= 0) { p.hp = 0; die(); return; } }
+  if (p.san <= 0) { p.hp -= 0.6 * dt; if (p.hp <= 0) { p.hp = 0; die(); return; } }
 
   // hallucinations and whispers
   if (p.san < 40) {
     G.hallT -= dt;
     if (G.hallT <= 0 && !NG) {
-      G.hallT = 6 + Math.random() * 14 * (p.san / 40 + 0.3);
+      G.hallT = 14 + Math.random() * 20 * (p.san / 40 + 0.3);
       const s = freeSpot(p.x, p.y, 260, 420, false, false);
       if (s) { const m = spawnMonster(Math.random() < 0.5 ? "ghoul" : "stalker", s.x, s.y, { fake: true, fakeT: 8, aggro: 99 }); m.hp = 1; }
     }

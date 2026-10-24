@@ -36,12 +36,12 @@ function updatePower(dt) {
   // at night a lit house calls more of them out of the forest
   G.lureT = (G.lureT == null ? 30 : G.lureT) - dt;
   if (G.lureT <= 0) {
-    G.lureT = 35 + Math.random() * 25;
+    G.lureT = 70 + Math.random() * 40;
     if (!World.indoor && G.night > 0.5) {
       const lit = World.lights.filter(l => l.sw && powerOf(l.sw).on);
       if (lit.length) {
         const l = lit[Math.floor(Math.random() * lit.length)];
-        const n = 1 + (Math.random() < 0.3 + G.day * 0.05 ? 1 : 0);
+        const n = 1;
         for (let i = 0; i < n; i++) { const s = freeSpot(l.x, l.y, 1100, 1500, false, false); if (s) spawnMonster(pickType(), s.x, s.y, { lured: true }); }
       }
     }
@@ -116,6 +116,7 @@ function homeUse(o) {
     case "fridge": case "medcab": {
       if (!o.full) { toast("Пусто. Может, завтра…", 1.6); return; }
       o.full = false; Sound.pickup();
+      if (G.night > 0.55 && Math.random() < 0.07) setTimeout(() => screamer("fridge"), 250);
       const loot = o.type === "fridge"
         ? [[{ canned: 1 + Math.floor(Math.random() * 2) }], [{ berries: 3 }], [{ veg: 2 }], [{ fish: 1, canned: 1 }]]
         : [[{ bandage: 2 }], [{ bandage: 1, tea: 1 }], [{ medkit: 1 }], [{ tea: 2 }]];

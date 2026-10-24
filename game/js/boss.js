@@ -1,12 +1,15 @@
 "use strict";
-// The Master of the forest walks the woods all the time. It cannot be killed: hide in a dark house,
-// break its line of sight or outrun it. When it sees you, "БЕГИ" — until it loses you.
+// The Master of the forest walks the woods all the time. It can be killed, but it is hard: thick hide,
+// it heals while it is not hunting, and gets faster when hurt. It cannot get into houses. When it sees
+// you, "БЕГИ" — until it loses you. Killed, it leaves a pile of loot and comes back three days later.
 
-const LORD = { roam: 64, huntNight: 236, huntDay: 214, seeNight: 900, seeDay: 560, loseAfter: 5, dmg: 42 };
+const LORD = { roam: 64, huntNight: 228, huntDay: 205, seeNight: 850, seeDay: 520, loseAfter: 5, dmg: 50, hp: 2600 };
+const LORD_LOOT = [["ammo9", 24], ["shells", 12], ["bolts", 10], ["medkit", 3], ["bandage", 5], ["fuel", 3], ["parts", 4], ["canned", 4], ["battery", 3], ["fang", 8], ["seeds", 4], ["spirit", 3], ["powder", 4]];
 
 function ensureLord(dt) {
   if (World.indoor || World.map !== "forest" || (G.clock || 0) < 90) return;
   if (G.mons.some(m => m.type === "lord" && !m.dead)) return;
+  if (G.lordDead && G.day < G.lordDead + 3) return;
   G.lordT = (G.lordT == null ? 0 : G.lordT) - dt;
   if (G.lordT > 0) return;
   G.lordT = 20;
@@ -15,7 +18,8 @@ function ensureLord(dt) {
     const a = Math.random() * Math.PI * 2, d = 2600 + Math.random() * 1500;
     const x = G.p.x + Math.cos(a) * d, y = G.p.y + Math.sin(a) * d;
     if (x < 200 || y < 200 || x > World.W - 200 || y > World.H - 200 || inSwamp(x, y) || insideHouse(x, y, 60)) continue;
-    spawnMonster("lord", x, y, { state: "roam", lostT: 0, searchT: 0, stepT: 0 });
+    const m = spawnMonster("lord", x, y, { state: "roam", lostT: 0, searchT: 0, stepT: 0 });
+    m.hp = m.max = LORD.hp * (Net.on ? 1.5 : 1) * (1 + Math.max(0, (G.lordKills || 0)) * 0.25);
     return;
   }
 }
@@ -26,7 +30,7 @@ function lordSpotted(m) {
   Sound.bossRoar(); setTimeout(() => Sound.sting(), 300);
   G.shake = Math.max(G.shake, 24); G.lightOff = Math.max(G.lightOff, 0.35);
   p.san = Math.max(0, p.san - 10);
-  tip("lord", "Это Хозяин леса. Его не убить. Беги, прячься в доме без света, уходи из виду.", "⚠");
+  tip("lord", "Это Хозяин леса. Он не может войти в дом — прячься внутри и закрой дверь. Убить его можно, но очень трудно.", "⚠");
 }
 
 function lordAI(m, dt, d, dx, dy, tgt) {
@@ -80,6 +84,10 @@ function lordAI(m, dt, d, dx, dy, tgt) {
   }
   if (m.stun > 0) spd = 0;
   if (inSwamp(m.x, m.y)) spd *= 0.75;
+  if (m.hp < m.max * 0.35) spd *= 1.12; // wounded, it gets desperate
+  // its wounds close while it is not hunting
+  if (m.state !== "hunt") m.hp = Math.min(m.max, m.hp + 6 * dt);
+  m.barT = Math.max(0, (m.barT || 0) - dt);
 
   // attack
   if (d < m.r + p.r + 30 && m.atkT <= 0 && m.state === "hunt") {
@@ -92,6 +100,8 @@ function lordAI(m, dt, d, dx, dy, tgt) {
   if (ml > 8 && !(m.state === "hunt" && d < m.r + p.r + 4)) { m.x += mx / ml * spd * dt; m.y += my / ml * spd * dt; m.a = Math.atan2(my, mx); }
   else if (m.state === "hunt") m.a = Math.atan2(dy, dx);
   collide(m);
+  // it cannot get into houses: it stops at the door and roars
+  if (insideHouse(m.x, m.y, 6)) { m.x = ox; m.y = oy; if (m.state === "hunt" && Math.random() < dt * 0.4) Sound.at(m.x, m.y, Sound.bossRoar); }
   const moved = Math.hypot(m.x - ox, m.y - oy);
   m.step += moved * 0.06;
   // heavy steps you hear before you see it
@@ -109,4 +119,18 @@ function updateLordFx(dt) {
   else if (!lord || lord.state !== "hunt" || lord.tgRemote || World.indoor) { G.lordHunt = false; return; }
   G.heartT = (G.heartT || 0) - dt;
   if (G.heartT <= 0) { G.heartT = 0.5; Sound.heart(); }
+}
+
+// the Master falls: everyone hears it, the forest breathes out, and its hoard spills on the ground
+function lordKilled(m) {
+  m.dead = true;
+  Sound.at(m.x, m.y, () => { Sound.bossRoar(); Sound.scream(); Sound.body(); });
+  G.shake = Math.max(G.shake, 30);
+  for (let i = 0; i < 6; i++) blood(m.x + (Math.random() - 0.5) * 60, m.y + (Math.random() - 0.5) * 60, 10, "#2a0606");
+  for (const [k, q] of LORD_LOOT) G.drops.push({ x: m.x + (Math.random() - 0.5) * 120, y: m.y + (Math.random() - 0.5) * 120, item: k, q, t: 600 });
+  G.lordDead = G.day; G.lordKills = (G.lordKills || 0) + 1; G.lordHunt = false;
+  G.p.san = Math.min(100, G.p.san + 40);
+  toast("Хозяин леса повержен! Его добыча лежит на земле.", 5);
+  if (Net.host) netSend({ t: "toast", s: "Хозяин леса повержен! Его добыча лежит на земле." });
+  save();
 }

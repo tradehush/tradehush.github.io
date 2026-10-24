@@ -25,6 +25,7 @@ function renderHud(dt) {
   drawScreenFx(ctx);
   drawHUD(ctx);
   drawTip(ctx);
+  if (!G.showMap) drawRun(ctx);
   if (G.showMap) drawMap(ctx);
   if (G.scare) drawScare(ctx);
   if (Input.touch && innerHeight > innerWidth && G.state === "play" && !G.showMap) {
@@ -366,6 +367,35 @@ function drawMap(ctx) {
     ctx.fillStyle = "#e8dcb0"; ctx.fillText(b.l, (b.x + s / 2) * u, (b.y + s / 2 + 1) * u);
   }
   ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+}
+
+// the Master of the forest has seen you: red pulsing edges, noise, and "БЕГИ" for three seconds
+function drawRun(ctx) {
+  const W = R.W, H = R.H, u = R.dpr, t = R.time;
+  if (G.lordHunt) {
+    const k = 0.5 + 0.5 * Math.sin(t * 12.5);
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.65);
+    vg.addColorStop(0, "rgba(120,0,0,0)"); vg.addColorStop(1, `rgba(150,0,0,${0.35 + k * 0.25})`);
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    // torn scanlines
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    for (let i = 0; i < 6; i++) { const y = (Math.random() * H) | 0; ctx.fillRect(0, y, W, (1 + Math.random() * 3) * u); }
+  }
+  const a = G.lordAlert || 0;
+  if (a > 0) {
+    const fade = Math.min(1, a / 0.4, (3 - a) / 0.15);
+    ctx.save();
+    ctx.globalAlpha = clamp(fade, 0, 1);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const size = Math.min(W, H) * 0.22 * (1 + (3 - a) * 0.04);
+    ctx.font = `900 ${size}px Impact, "Arial Black", sans-serif`;
+    const x = W / 2 + (Math.random() - 0.5) * 10 * u, y = H * 0.38 + (Math.random() - 0.5) * 8 * u;
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillText("БЕГИ", x + 4 * u, y + 5 * u);
+    ctx.fillStyle = "rgba(255,40,20,0.5)"; ctx.fillText("БЕГИ", x - 6 * u, y);
+    ctx.fillStyle = "#d00a0a"; ctx.fillText("БЕГИ", x, y);
+    if (Math.random() < 0.3) { ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(0, y - size * 0.1 + (Math.random() - 0.5) * size * 0.6, W, size * 0.08); }
+    ctx.restore();
+  }
 }
 
 // the jump-scare face, drawn procedurally and shaking

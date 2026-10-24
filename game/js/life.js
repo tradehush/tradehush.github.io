@@ -288,7 +288,7 @@ function waterSpot() {
   const p = G.p;
   for (const s of swampNear(p.x, p.y)) {
     const d = Math.hypot(s.x - p.x, s.y - p.y) - s.r;
-    if (d > -15 && d < 90) {
+    if (d > -s.r * 0.2 - 20 && d < 90) {
       const a = Math.atan2(s.y - p.y, s.x - p.x);
       if (Math.abs(angDiff(p.a, a)) < 1.0) {
         const reach = Math.min(d + 60, 160);

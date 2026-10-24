@@ -181,6 +181,8 @@ const Sound = (() => {
     splash() { noise(0.4, { type: "lowpass", freq: 1500, freqEnd: 300, vol: 0.3, attack: 0.01 }); },
     bite() { noise(0.15, { type: "bandpass", freq: 1200, q: 3, vol: 0.4 }); tone(900, 0.12, { vol: 0.15 }); tone(1300, 0.12, { vol: 0.12, when: 0.12 }); },
     plane() { noise(9, { type: "lowpass", freq: 260, vol: 0.35, attack: 2.5 }); tone(85, 9, { type: "sawtooth", vol: 0.05, freqEnd: 70, attack: 2.5 }); },
+    lordStep(vol = 0.3) { tone(48, 0.35, { vol: vol, freqEnd: 30 }); noise(0.25, { type: "lowpass", freq: 220, vol: vol * 0.8 }); },
+    heart() { tone(55, 0.12, { vol: 0.35, freqEnd: 40 }); tone(52, 0.12, { vol: 0.28, freqEnd: 38, when: 0.18 }); },
     piano() {
       // a few wrong notes on an old upright
       const sc = [220, 246.9, 261.6, 293.7, 329.6, 349.2, 392, 415.3];

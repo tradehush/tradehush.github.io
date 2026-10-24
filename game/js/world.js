@@ -324,7 +324,7 @@ function buildDungeon(rnd, id) {
   const tileXY = (r) => ({ x: ox + (r.x0 + 1 + rnd() * (r.x1 - r.x0 - 1)) * T, y: oy + (r.y0 + 1 + rnd() * (r.y1 - r.y0 - 1)) * T });
   // the prize at the end
   const prize = { catacombs: ["crossbow", { bolts: 10 }, "Ящик с арбалетом отца Михаила"], mine: ["pistol", { ammo9: 12 }, "Ящик в последнем забое"], bunker: ["shotgun", { shells: 8 }, "Оружейный ящик"],
-    sewer: ["machete", { ammo9: 10, medkit: 1, parts: 2 }, "Тайник Седого"], hospital: ["pistol", { ammo9: 18, medkit: 2, bandage: 3 }, "Сейф главврача"], cave: ["crossbow", { bolts: 14, canned: 2 }, "Рюкзак пропавшего туриста"] }[id];
+    sewer: ["shotgun", { shells: 8, medkit: 1, parts: 2 }, "Тайник Седого"], hospital: ["pistol", { ammo9: 18, medkit: 2, bandage: 3 }, "Сейф главврача"], cave: ["crossbow", { bolts: 14, canned: 2 }, "Рюкзак пропавшего туриста"] }[id];
   wchest(end.cx + 30, end.cy, prize[0], prize[1], prize[2]);
   if (id === "catacombs") inter({ type: "seal", seal: "bone", x: end.cx - 40, y: end.cy, r: 56, label: "Печать: Кость", guard: [["ghoul", 3], ["crawler", 2]] });
   World.endRoom = end;
@@ -847,6 +847,11 @@ function collide(e) {
       const dx = e.x - o.x, dy = e.y - o.y, d = dx * dx + dy * dy;
       if (d < rr * rr && d > 1e-6) { const l = Math.sqrt(d); e.x += dx / l * (rr - l); e.y += dy / l * (rr - l); }
     }
+    if (World.sgrid) for (const s of swampNear(e.x, e.y)) {
+      if (!s.lake) continue;
+      const rr = s.r * WATER_K + e.r, dx = e.x - s.x, dy = e.y - s.y, d = dx * dx + dy * dy;
+      if (d < rr * rr && d > 1e-6) { const l = Math.sqrt(d); e.x += dx / l * (rr - l); e.y += dy / l * (rr - l); }
+    }
   }
   e.x = clamp(e.x, 20, World.W - 20); e.y = clamp(e.y, 20, World.H - 20);
 }
@@ -863,6 +868,12 @@ function swampNear(x, y) {
   const S = World.sgrid; if (!S) return World.swamp;
   const gx = Math.floor(x / S.c), gy = Math.floor(y / S.c);
   return gx < 0 || gy < 0 || gx >= S.nw || gy >= S.nh ? [] : S.g[gy * S.nw + gx];
+}
+// deep water: lakes and rivers push you back to the shore
+const WATER_K = 0.9;
+function inDeepWater(x, y, r = 0) {
+  for (const s of swampNear(x, y)) if (s.lake && dist2(x, y, s.x, s.y) < (s.r * WATER_K + r) ** 2) return true;
+  return false;
 }
 function inSwamp(x, y) {
   for (const s of swampNear(x, y)) if (dist2(x, y, s.x, s.y) < s.r * s.r * 0.8) return true;
@@ -947,6 +958,8 @@ function buildNav() {
   };
   World.res.forEach(o => { if (o.block) markCircle(o); });
   World.stones.forEach(markCircle);
+  // lakes and rivers cannot be walked through
+  World.swamp.forEach(o => { if (o.lake) markCircle({ x: o.x, y: o.y, r: o.r * WATER_K - 14 }); });
 }
 
 const _bfsQ = new Int32Array(200 * 200);

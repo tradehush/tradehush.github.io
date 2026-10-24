@@ -355,7 +355,7 @@ function spawnTick(dt) {
   const night = G.night > 0.5;
   // day is quiet, night is not
   G.spawnT = World.indoor ? 7 : night ? Math.max(2, 3.6 - G.day * 0.25) : 20;
-  const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss").length;
+  const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss" && m.type !== "lord").length;
   const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 2;
   if (free >= cap) return;
   // the very first minutes are calm
@@ -371,6 +371,14 @@ function spawnTick(dt) {
 function damage(m, dmg, kx = 0, ky = 0, fire = false) {
   if (m.dead) return;
   if (m.fake) { vanish(m); return; }
+  if (m.type === "lord") {
+    // it cannot be killed; a hard enough blow only staggers it for a moment
+    m.hitF = 0.12; spark(m.x, m.y, "#3a2a1a", 4, 80);
+    if (dmg >= 20 && !(m.stunCd > G.clock)) { m.stun = 0.6; m.stunCd = G.clock + 4; }
+    if (m.state !== "hunt" && dist2(m.x, m.y, G.p.x, G.p.y) < 1200 * 1200) { m.state = "hunt"; m.lastX = G.p.x; m.lastY = G.p.y; m.lostT = 0; lordSpotted(m); }
+    tip("lordhit", "Его не убить. Только задержать на миг. Беги!", "⚠");
+    return;
+  }
   let mul = 1;
   if (m.type === "stalker" && m.beam) mul = 1.6;
   if (fire && m.type === "boss") mul = 2;
@@ -444,6 +452,7 @@ function updateMonsters(dt) {
     if (m.dead) continue;
     const def = MONSTERS[m.type];
     const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
+    if (m.type === "lord") { lordAI(m, dt, d, dx, dy); continue; }
     m.beam = isBeamLit(m.x, m.y, m.r) || fireLit(m.x, m.y);
     m.lit = m.beam || d < HALO_R + m.r || G.night < 0.4;
     m.hitF = Math.max(0, m.hitF - dt);
@@ -583,6 +592,7 @@ function updateMonsters(dt) {
     if (m.dead) return false;
     if (m.guard || m.type === "boss" || m.camp) return true;
     const d2p = dist2(m.x, m.y, p.x, p.y);
+    if (m.type === "lord") return d2p < 7000 * 7000;
     if (d2p > 1500 * 1500) return false;
     if (G.night < 0.2 && m.state !== "chase" && d2p > 750 * 750 && Math.random() < dt * 0.3) return false;
     if (m.type === "stalker" && G.night < 0.15 && d2p > 500 * 500) return false;
@@ -775,7 +785,12 @@ function doInteract(o) {
       let got = 0;
       for (const [k, ch, a, b] of CRATE_LOOT) if (Math.random() < ch) { addItem(k, a + Math.floor(Math.random() * (b - a + 1))); got++; }
       if (!got) addItem("cloth", 1);
-      if (Math.random() < CRATE_WEAPON_CHANCE) {
+      if (Math.random() < CRATE_GUN_CHANCE) {
+        const pool = ["shotgun", "shotgun", "shotgun", "pistol", "pistol", "crossbow"].filter(id => !G.owned.includes(id));
+        const w = pool[Math.floor(Math.random() * pool.length)];
+        if (w) { giveWeapon(w); const wd = WEAPONS[W_IDX[w]]; if (wd.ammo) addItem(wd.ammo, w === "shotgun" ? 4 : 6); toast(`В ящике оружие: ${wd.n}!`, 3.5); Sound.craft(); }
+        else addItem(Math.random() < 0.5 ? "shells" : "ammo9", 4);
+      } else if (Math.random() < CRATE_WEAPON_CHANCE) {
         const w = ["bat", "machete"].find(id => !G.owned.includes(id));
         if (w) { giveWeapon(w); toast(`На дне ящика: ${WEAPONS[W_IDX[w]].n}!`, 3.5); Sound.craft(); }
       }
@@ -1106,6 +1121,8 @@ function update(dt) {
   G.night = World.indoor ? 1 : nightFactor(G.t);
   G.clock = (G.clock || 0) + dt;
   updatePower(dt);
+  ensureLord(dt);
+  updateLordFx(dt);
 
   // weather: mostly clear and sunny by day; now and then fog rolls in or a thunderstorm comes
   G.stormT -= dt;
@@ -1124,7 +1141,7 @@ function update(dt) {
   }
   // the flashlight goes mad near the Shadow and the Master
   let near = 0;
-  for (const m of G.mons) if (!m.fake && (m.type === "stalker" || m.type === "boss")) near = Math.max(near, 1 - Math.hypot(m.x - p.x, m.y - p.y) / 480);
+  for (const m of G.mons) if (!m.fake && (m.type === "stalker" || m.type === "boss" || m.type === "lord")) near = Math.max(near, 1 - Math.hypot(m.x - p.x, m.y - p.y) / 480);
   G.interf = clamp(near, 0, 1);
   G.scareCd = Math.max(0, G.scareCd - dt);
   G.spotCd = Math.max(0, G.spotCd - dt);
@@ -1216,7 +1233,7 @@ function update(dt) {
   if (p.hp < 55) tip("heal", `Ты ранен. Лечение — ${K("🩹", "H")} (бинт или аптечка). Бинт: 2 ткани.`);
   if ((G.inv.fang || 0) > 0) tip("fang", "Клыки тварей нужны для мачете и капканов.");
   if (G.mons.some(m => m.beam && !m.fake && m.type === "stalker")) tip("stalker", "Это Тень. Пока свет фонаря на ней — она не двигается. Не отворачивайся!");
-  else if (G.mons.some(m => m.beam && !m.fake)) tip("monster", `Тварь! Бей — ${K("⚔", "ЛКМ")}. Выстрелы громкие и приманивают других.`);
+  else if (G.mons.some(m => m.beam && !m.fake && m.type !== "lord")) tip("monster", `Тварь! Бей — ${K("⚔", "ЛКМ")}. Выстрелы громкие и приманивают других.`);
   // builds: a tap uses them, holding picks them up to move or remove
   if (p.act && p.act.type === "build" && (!inp.interact || !target || target.b !== p.act.b)) {
     if (!inp.interact && !inp.interactUsed && G.builds.includes(p.act.b)) buildUse(p.act.b);

@@ -1532,7 +1532,7 @@ function buildMonster(m) {
       for (let i = 0; i < 3; i++) part(v.jaw, new THREE.CylinderGeometry(0.4, 0.2, 10, 3), pus, 6, -6, (i - 1) * 2);
       break;
     }
-    case "boss": {
+    case "lord": case "boss": {
       v.legs.push(limb(body, 12, 70, dark, 0, 100, -18), limb(body, 12, 70, dark, 0, 100, 18));
       part(body, capsule(6, 60), dark, -4, 140, 0, 1, 1, 1, 0, 0, -0.2);
       for (let i = 0; i < 6; i++) {
@@ -1562,6 +1562,7 @@ function buildMonster(m) {
   if (m.fake) for (const x of [skin, dark]) { x.transparent = true; x.opacity = 0.6; }
   g.traverse(o => { if (o.isMesh && !o.material.isMeshBasicMaterial) o.castShadow = true; });
   V.scene.add(g);
+  if (m.type === "lord") g.scale.setScalar(1.3);
   return v;
 }
 
@@ -1581,7 +1582,7 @@ function syncMonsters(dt) {
     else if (L.length) { L[0].rotation.z = sw; L[1].rotation.z = -sw; }
     const wind = m.wind > 0;
     v.arms.forEach((a, i) => {
-      const base = m.type === "stalker" ? 0.35 : m.type === "boss" ? 0.5 : m.type === "brute" ? 0.6 : 1.0;
+      const base = m.type === "stalker" ? 0.35 : m.type === "boss" || m.type === "lord" ? 0.5 : m.type === "brute" ? 0.6 : 1.0;
       a.rotation.z = lerp(a.rotation.z, wind ? 2.5 : base + Math.sin(m.step + i * 3) * 0.25, Math.min(1, dt * (wind ? 14 : 6)));
       a.rotation.x = (i ? 1 : -1) * (wind ? 0.35 : 0.12);
     });

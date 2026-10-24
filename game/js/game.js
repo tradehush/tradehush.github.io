@@ -1,0 +1,909 @@
+"use strict";
+// Game state and simulation.
+
+const SAVE_KEY = "blackpine.save.v1";
+const FLASH_RANGE = 440, FLASH_HALF = 0.5, FLASH_RAYS = 72, HALO_R = 85;
+
+const G = {
+  state: "title", seed: 1, t: 15 / 24, day: 1, step: 0,
+  p: null, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
+  inv: {}, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {},
+  msgs: [], shake: 0, flash: 0, hurtFlash: 0, lightOff: 0, noise: null, spawnT: 5, flowT: 0, hallT: 15, whisperT: 20,
+  rays: [], night: 0, boss: null, endT: 0, bossDead: false, inside: null, swingT: 0,
+  input: { up: 0, down: 0, left: 0, right: 0, sprint: false, attack: false, interact: false, aimX: 0, aimY: 0, mvX: 0, mvY: 0, touchAim: false },
+};
+
+function newPlayer() {
+  return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, hp: 100, sta: 100, san: 100, bat: 100, light: true,
+    atkCd: 0, reloadT: 0, iframe: 0, staLock: 0, stepT: 0, act: null, actProg: 0, actTick: 0, moving: false };
+}
+
+function toast(text, dur = 3.5) {
+  G.msgs.push({ text, t: dur, max: dur });
+  if (G.msgs.length > 4) G.msgs.shift();
+}
+
+function addItem(k, q = 1, silent = false) {
+  G.inv[k] = (G.inv[k] || 0) + q;
+  if (!silent) toast(`+${q} ${ITEMS[k].n}`, 1.8);
+}
+function has(need) { for (const k in need) if ((G.inv[k] || 0) < need[k]) return false; return true; }
+function take(need) { for (const k in need) G.inv[k] -= need[k]; }
+
+function nightFactor(t) {
+  const h = t * 24;
+  if (h < 4) return 1; if (h < 7) return 1 - (h - 4) / 3; if (h < 18) return 0; if (h < 21.5) return (h - 18) / 3.5; return 1;
+}
+function clock() {
+  const m = Math.floor(G.t * 24 * 60);
+  return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+}
+
+// --- new game / save / load ----------------------------------------------------
+
+function newGame() {
+  G.seed = 1337;
+  generateWorld(G.seed);
+  Object.assign(G, { t: 15 / 24, day: 1, step: 0, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
+    inv: { bandage: 1 }, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {}, msgs: [],
+    boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0 });
+  G.p = newPlayer();
+}
+
+function save() {
+  try {
+    const p = G.p;
+    const res = [];
+    World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
+    const it = World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0));
+    const data = { v: 1, seed: G.seed, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
+      seals: G.seals, placed: G.placed, discovered: G.discovered, fires: G.fires, traps: G.traps,
+      p: { x: p.x, y: p.y, hp: p.hp, san: p.san, bat: p.bat, light: p.light }, res, it };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    return true;
+  } catch (e) { return false; }
+}
+
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+
+function load() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch (e) { d = null; }
+  if (!d || d.v !== 1) return false;
+  newGame();
+  generateWorld(d.seed); G.seed = d.seed;
+  Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
+    placed: d.placed, discovered: d.discovered || {}, fires: d.fires || [], traps: d.traps || [] });
+  for (const [i, left, regrow] of d.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; }
+  (d.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
+  Object.assign(G.p, d.p);
+  G.p.light = true;
+  return true;
+}
+
+// --- weapons -------------------------------------------------------------------
+
+function curW() { return WEAPONS[W_IDX[G.owned[G.wi]]]; }
+function bestTool(key) { let b = 0.25; for (const id of G.owned) { const w = WEAPONS[W_IDX[id]]; if (w[key]) b = Math.max(b, w[key]); } return b; }
+
+function giveWeapon(id) {
+  if (!G.owned.includes(id)) {
+    G.owned.push(id);
+    G.owned.sort((a, b) => W_IDX[a] - W_IDX[b]);
+  }
+  G.wi = G.owned.indexOf(id);
+  const w = WEAPONS[W_IDX[id]];
+  if (w.mag && G.mag[id] == null) G.mag[id] = 0;
+}
+
+function switchWeapon(i) {
+  if (i < 0 || i >= G.owned.length || i === G.wi) return;
+  G.wi = i; G.p.reloadT = 0; G.p.atkCd = Math.max(G.p.atkCd, 0.15);
+  Sound.click();
+}
+function cycleWeapon(d) { const n = G.owned.length; switchWeapon(((G.wi + d) % n + n) % n); }
+
+function startReload() {
+  const w = curW(), p = G.p;
+  if (!w.mag || p.reloadT > 0) return;
+  if ((G.mag[w.id] || 0) >= w.mag || !(G.inv[w.ammo] > 0)) return;
+  p.reloadT = w.reload; Sound.reload();
+}
+function finishReload() {
+  const w = curW();
+  const need = w.mag - (G.mag[w.id] || 0), got = Math.min(need, G.inv[w.ammo] || 0);
+  G.mag[w.id] = (G.mag[w.id] || 0) + got; G.inv[w.ammo] -= got;
+}
+
+function aimPoint() {
+  const p = G.p;
+  if (G.input.touchAim || !Input.mouseActive) return { x: p.x + Math.cos(p.a) * 260, y: p.y + Math.sin(p.a) * 260 };
+  return { x: G.input.aimX, y: G.input.aimY };
+}
+
+function makeNoise(x, y, r) { G.noise = { x, y, r, t: 0.5 }; }
+
+function attack() {
+  const p = G.p, w = curW();
+  if (p.atkCd > 0 || p.reloadT > 0) return;
+  if (w.kind === "melee") {
+    p.atkCd = w.cd; G.swingT = 0.18; Sound.swing();
+    let hit = false;
+    for (const m of G.mons) {
+      const d = Math.hypot(m.x - p.x, m.y - p.y);
+      if (d > w.range + m.r) continue;
+      if (Math.abs(angDiff(p.a, Math.atan2(m.y - p.y, m.x - p.x))) > w.arc / 2 + m.r / Math.max(d, 1)) continue;
+      if (wallBetween(p.x, p.y, m.x, m.y)) continue;
+      damage(m, w.dmg, (m.x - p.x) / (d || 1) * w.kb, (m.y - p.y) / (d || 1) * w.kb);
+      hit = true;
+    }
+    if (hit) { Sound.hit(); G.shake = Math.max(G.shake, 3); }
+    makeNoise(p.x, p.y, 200);
+    return;
+  }
+  if (w.kind === "throw") {
+    if (!(G.inv.molotov > 0)) { toast("Нет коктейлей Молотова", 1.5); p.atkCd = 0.5; return; }
+    G.inv.molotov--; p.atkCd = w.cd;
+    const t = aimPoint(); let dx = t.x - p.x, dy = t.y - p.y; const l = Math.hypot(dx, dy) || 1;
+    const d = Math.min(l, 360);
+    G.projs.push({ kind: "bottle", sx: p.x, sy: p.y, tx: p.x + dx / l * d, ty: p.y + dy / l * d, t: 0, dur: 0.25 + d / 900, x: p.x, y: p.y });
+    Sound.swing();
+    return;
+  }
+  // guns and crossbow
+  const m = G.mag[w.id] || 0;
+  if (m <= 0) {
+    if (G.inv[w.ammo] > 0) startReload(); else { Sound.click(); p.atkCd = 0.3; toast(`Нет боеприпасов: ${ITEMS[w.ammo].n}`, 1.5); }
+    return;
+  }
+  G.mag[w.id] = m - 1; p.atkCd = w.cd;
+  const mx = p.x + Math.cos(p.a) * 18, my = p.y + Math.sin(p.a) * 18;
+  if (w.kind === "bow") {
+    G.projs.push({ kind: "bolt", x: mx, y: my, vx: Math.cos(p.a) * w.speed, vy: Math.sin(p.a) * w.speed, dmg: w.dmg, life: 0.9, pierce: 3, hit: [] });
+    Sound.bow(); makeNoise(p.x, p.y, w.noise);
+    return;
+  }
+  w.id === "shotgun" ? Sound.shotgun() : Sound.shot();
+  makeNoise(p.x, p.y, w.noise);
+  G.flash = 0.07; G.shake = Math.max(G.shake, w.id === "shotgun" ? 9 : 4);
+  const bl = nearBlockers(p.x, p.y, w.range);
+  for (let k = 0; k < w.pellets; k++) {
+    const a = p.a + (Math.random() - 0.5) * w.spread;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    let t = castRay(mx, my, a, w.range, bl), target = null;
+    for (const mo of G.mons) {
+      const tt = rayCircle(mx, my, dx, dy, mo.x, mo.y, mo.r + 2, t);
+      if (tt < t) { t = tt; target = mo; }
+    }
+    G.tracers.push({ x1: mx, y1: my, x2: mx + dx * t, y2: my + dy * t, life: 0.08 });
+    if (target) {
+      const fall = w.id === "shotgun" ? clamp(1.25 - t / w.range, 0.35, 1) : 1;
+      damage(target, w.dmg * fall, dx * 90, dy * 90);
+    } else {
+      for (let i = 0; i < 3; i++) spark(mx + dx * t, my + dy * t, "#d9c79a");
+    }
+  }
+}
+
+function spark(x, y, col, n = 1, spd = 120, life = 0.3, size = 2) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = spd * (0.3 + Math.random());
+    G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life, max: life, col, size });
+  }
+}
+function blood(x, y, n = 6, col = "#5a0c0c") {
+  spark(x, y, col, n, 160, 0.45, 2.5);
+  G.decals.push({ x: x + (Math.random() - 0.5) * 10, y: y + (Math.random() - 0.5) * 10, r: 6 + Math.random() * 10, a: 0.7, col });
+  if (G.decals.length > 180) G.decals.shift();
+}
+
+// --- monsters --------------------------------------------------------------------
+
+function spawnMonster(type, x, y, extra = {}) {
+  const d = MONSTERS[type];
+  const hpMul = type === "boss" ? 1 : 1 + (G.day - 1) * 0.12;
+  const m = Object.assign({ type, x, y, r: d.r, hp: d.hp * hpMul, max: d.hp * hpMul, a: Math.random() * 6.28, state: "wander", aggro: 0,
+    atkT: 0, wind: 0, stun: 0, kx: 0, ky: 0, hitF: 0, wx: x, wy: y, wT: 0, losT: 0, los: false, lit: false, beam: false,
+    spitT: 2, sumT: 6, rootT: 8, darkT: 12, chargeT: 9, charge: 0, step: Math.random() * 10, growlT: 3 + Math.random() * 8, burn: 0 }, extra);
+  G.mons.push(m);
+  return m;
+}
+
+function freeSpot(cx, cy, minD, maxD, allowHouse = false, avoidLight = true) {
+  for (let i = 0; i < 40; i++) {
+    const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
+    const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+    if (x < 40 || y < 40 || x > WORLD_W - 40 || y > WORLD_H - 40) continue;
+    const ci = Math.floor(y / World.ncell) * World.nw + Math.floor(x / World.ncell);
+    if (World.nav[ci]) continue;
+    if (!allowHouse && insideHouse(x, y, 30)) continue;
+    if (avoidLight) {
+      let bad = false;
+      for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 420 * 420) bad = true;
+      for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r + 260) ** 2) bad = true;
+      if (bad) continue;
+      if (isBeamLit(x, y, 20)) continue;
+    }
+    return { x, y };
+  }
+  return null;
+}
+
+function pickType() {
+  const n = G.night > 0.5, d = G.day;
+  const w = n
+    ? { crawler: 40, ghoul: 30, spitter: 12 + d * 2, stalker: d >= 2 ? 8 + d * 2 : 3, brute: d >= 2 ? 4 + d * 2 : 1 }
+    : { crawler: 55, ghoul: 40, spitter: 10, brute: d >= 3 ? 4 : 0 };
+  let s = 0; for (const k in w) s += w[k];
+  let r = Math.random() * s;
+  for (const k in w) { r -= w[k]; if (r <= 0) return k; }
+  return "crawler";
+}
+
+function spawnTick(dt) {
+  if (G.step >= 7) return;
+  G.spawnT -= dt;
+  if (G.spawnT > 0) return;
+  const night = G.night > 0.5;
+  G.spawnT = night ? Math.max(2.2, 4.2 - G.day * 0.3) : 11;
+  const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss").length;
+  const cap = night ? Math.min(7 + G.day * 2, 18) : 3;
+  if (free >= cap) return;
+  // the very first minutes are calm
+  if (G.step < 1 && !night) return;
+  const s = freeSpot(G.p.x, G.p.y, 640, 950);
+  if (!s) return;
+  const type = pickType();
+  if (type === "stalker" && !night) return;
+  const m = spawnMonster(type, s.x, s.y);
+  if (night && Math.random() < 0.5) { m.state = "chase"; m.aggro = 6; }
+}
+
+function damage(m, dmg, kx = 0, ky = 0, fire = false) {
+  if (m.dead) return;
+  if (m.fake) { vanish(m); return; }
+  let mul = 1;
+  if (m.type === "stalker" && m.beam) mul = 1.6;
+  if (fire && m.type === "boss") mul = 2;
+  m.hp -= dmg * mul;
+  m.hitF = 0.12;
+  m.aggro = 10; m.state = "chase";
+  const kbm = m.type === "boss" ? 0.04 : m.type === "brute" ? 0.3 : 1;
+  m.kx += kx * kbm; m.ky += ky * kbm;
+  if (!fire) blood(m.x, m.y, 5, m.type === "stalker" ? "#141418" : m.type === "spitter" ? "#3d4a12" : "#5a0c0c");
+  if (m.hp <= 0) kill(m);
+}
+
+function vanish(m) {
+  m.dead = true;
+  spark(m.x, m.y, "#222", 14, 80, 0.8, 4);
+  Sound.whisper();
+}
+
+function kill(m) {
+  m.dead = true;
+  const d = MONSTERS[m.type];
+  for (let i = 0; i < 3; i++) blood(m.x, m.y, 8, m.type === "stalker" ? "#141418" : "#4a0909");
+  Sound.growl(m.type === "crawler" ? 1.8 : m.type === "brute" ? 0.6 : 1.1, 0.25);
+  for (const k in d.drop) if (Math.random() < d.drop[k]) G.drops.push({ x: m.x + (Math.random() - 0.5) * 20, y: m.y + (Math.random() - 0.5) * 20, item: k, q: 1, t: 120 });
+  if (Math.random() < 0.18) G.drops.push({ x: m.x, y: m.y, item: Math.random() < 0.6 ? "ammo9" : "shells", q: Math.random() < 0.6 ? 3 : 2, t: 120 });
+  if (m.type === "boss") bossDefeated();
+}
+
+function isBeamLit(x, y, r) {
+  const p = G.p;
+  if (!p.light || G.lightOff > 0 || !G.rays.length) return false;
+  const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
+  if (d > FLASH_RANGE + r) return false;
+  const da = angDiff(p.a, Math.atan2(dy, dx));
+  if (Math.abs(da) > FLASH_HALF + r / Math.max(d, 1)) return false;
+  const idx = clamp(Math.round((da + FLASH_HALF) / (2 * FLASH_HALF) * (FLASH_RAYS - 1)), 0, FLASH_RAYS - 1);
+  return d < G.rays[idx] + r;
+}
+function fireLit(x, y) {
+  for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 220 * 220) return true;
+  for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r * 0.75) ** 2) return true;
+  return false;
+}
+function nearFire(x, y, r) {
+  for (const f of G.fires) if (dist2(x, y, f.x, f.y) < r * r) return f;
+  for (const l of World.lights) if (l.col.startsWith("255") && dist2(x, y, l.x, l.y) < r * r) return l;
+  return null;
+}
+
+function hurt(dmg, src) {
+  const p = G.p;
+  if (p.iframe > 0 || G.state !== "play") return;
+  p.hp -= dmg; p.iframe = 0.45; p.san = Math.max(0, p.san - dmg * 0.25);
+  G.shake = Math.max(G.shake, 8); G.hurtFlash = 0.5;
+  Sound.hurt(); blood(p.x, p.y, 6);
+  if (src) { const dx = p.x - src.x, dy = p.y - src.y, l = Math.hypot(dx, dy) || 1; p.x += dx / l * 10; p.y += dy / l * 10; collide(p); }
+  if (p.hp <= 0) { p.hp = 0; die(); }
+}
+
+function updateMonsters(dt) {
+  const p = G.p;
+  const senseBase = 330 + G.night * 260 + (p.light ? 110 : 0);
+  for (const m of G.mons) {
+    if (m.dead) continue;
+    const def = MONSTERS[m.type];
+    const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
+    m.beam = isBeamLit(m.x, m.y, m.r) || fireLit(m.x, m.y);
+    m.lit = m.beam || d < HALO_R + m.r || G.night < 0.4;
+    m.hitF = Math.max(0, m.hitF - dt);
+    m.atkT = Math.max(0, m.atkT - dt);
+    m.losT -= dt;
+    if (m.losT <= 0) { m.losT = 0.25 + Math.random() * 0.15; m.los = !wallBetween(m.x, m.y, p.x, p.y); }
+
+    // burning
+    if (m.burn > 0) { m.burn -= dt; damage(m, 18 * dt, 0, 0, true); if (Math.random() < 0.5) spark(m.x, m.y, "#ff9a2a", 1, 60, 0.4, 3); if (m.dead) continue; }
+    for (const f of G.projs) if (f.kind === "firezone" && dist2(m.x, m.y, f.x, f.y) < (f.r + m.r) ** 2) { damage(m, 42 * dt, 0, 0, true); m.burn = 2; }
+    if (m.dead) continue;
+
+    // hallucinations dissolve when looked at or touched
+    if (m.fake) {
+      m.fakeT -= dt;
+      if (m.beam && d < 360 || d < 40 || m.fakeT <= 0) { if (d < 40) { p.san = Math.max(0, p.san - 6); Sound.scream(); G.hurtFlash = 0.3; } vanish(m); continue; }
+    }
+
+    if (m.stun > 0) { m.stun -= dt; m.kx *= 0.85; m.ky *= 0.85; m.x += m.kx * dt; m.y += m.ky * dt; collide(m); continue; }
+
+    // awareness
+    const heard = G.noise && dist2(m.x, m.y, G.noise.x, G.noise.y) < G.noise.r * G.noise.r;
+    if ((d < senseBase && (m.los || d < 160)) || heard || (m.beam && d < FLASH_RANGE) || m.guard || m.type === "boss") { m.aggro = Math.max(m.aggro, heard ? 8 : 5); }
+    m.aggro -= dt;
+    m.state = m.aggro > 0 ? "chase" : "wander";
+
+    // growls
+    m.growlT -= dt;
+    if (m.growlT <= 0 && d < 700) {
+      m.growlT = 5 + Math.random() * 9;
+      if (m.type === "stalker") { if (Math.random() < 0.4) Sound.whisper(); }
+      else if (!m.fake) Sound.growl(m.type === "crawler" ? 1.7 : m.type === "brute" ? 0.55 : m.type === "boss" ? 0.4 : m.type === "spitter" ? 1.3 : 1, clamp(0.35 - d / 2500, 0.05, 0.35));
+    }
+
+    let spd = def.speed * (m.fake ? 1.1 : 1), mvx = 0, mvy = 0;
+    if (inSwamp(m.x, m.y)) spd *= 0.7;
+
+    // the stalker only moves while nobody is looking at it
+    m.frozen = m.type === "stalker" && m.beam;
+    if (m.frozen) { spd = 0; m.wind = 0; }
+
+    if (m.state === "chase") {
+      let dir = null;
+      if (m.los) dir = { x: dx / d, y: dy / d };
+      else dir = flowDir(m.x, m.y) || { x: dx / d, y: dy / d };
+      if (m.type === "spitter" && m.los) {
+        if (d < 200) dir = { x: -dx / d, y: -dy / d };
+        else if (d < 330) dir = { x: -dy / d * 0.6, y: dx / d * 0.6 };
+        m.spitT -= dt;
+        if (m.spitT <= 0 && d < 480) {
+          m.spitT = def.acd + Math.random();
+          const lead = 0.25;
+          const tx = p.x + (p.vx || 0) * lead - m.x, ty = p.y + (p.vy || 0) * lead - m.y, tl = Math.hypot(tx, ty) || 1;
+          G.projs.push({ kind: "acid", x: m.x, y: m.y, vx: tx / tl * 340, vy: ty / tl * 340, life: 1.8, dmg: def.dmg });
+          Sound.spit();
+        }
+      }
+      if (m.type === "boss") bossAI(m, dt, d, dx, dy);
+      if (m.charge > 0) { spd *= 2.8; m.charge -= dt; }
+      mvx = dir.x; mvy = dir.y;
+      // weak creatures fear fire
+      if (m.type !== "brute" && m.type !== "boss" && m.type !== "stalker" && !m.guard) {
+        const f = nearFire(m.x, m.y, 190);
+        if (f) { const fx = m.x - f.x, fy = m.y - f.y, fl = Math.hypot(fx, fy) || 1; mvx = fx / fl; mvy = fy / fl; m.aggro = Math.min(m.aggro, 2); }
+      }
+      m.a = Math.atan2(dy, dx);
+      // attack
+      const reach = m.r + p.r + def.reach;
+      if (!m.frozen && m.type !== "spitter") {
+        if (m.wind > 0) {
+          m.wind -= dt; spd *= 0.2;
+          if (m.wind <= 0) {
+            if (d < reach + (m.type === "brute" || m.type === "boss" ? 22 : 10) && m.los && !m.fake) hurt(def.dmg, m);
+            m.atkT = def.acd;
+          }
+        } else if (d < reach && m.atkT <= 0) {
+          m.wind = m.type === "brute" ? 0.65 : m.type === "boss" ? 0.5 : m.type === "stalker" ? 0.12 : 0.28;
+        }
+      } else if (m.type === "spitter" && d < reach && m.atkT <= 0) { hurt(def.dmg * 0.6, m); m.atkT = def.acd; }
+      if (d < m.r + p.r + 2) { mvx = 0; mvy = 0; }
+    } else {
+      // wander
+      m.wT -= dt;
+      if (m.wT <= 0) { m.wT = 2 + Math.random() * 4; const a = Math.random() * 6.28; m.wx = m.x + Math.cos(a) * 200; m.wy = m.y + Math.sin(a) * 200; }
+      const wx = m.wx - m.x, wy = m.wy - m.y, wl = Math.hypot(wx, wy);
+      if (wl > 10) { mvx = wx / wl * 0.4; mvy = wy / wl * 0.4; m.a = Math.atan2(wy, wx); }
+    }
+
+    m.kx *= Math.pow(0.02, dt); m.ky *= Math.pow(0.02, dt);
+    const ox = m.x, oy = m.y;
+    m.x += (mvx * spd + m.kx) * dt; m.y += (mvy * spd + m.ky) * dt;
+    collide(m);
+    m.step += Math.hypot(m.x - ox, m.y - oy) * 0.08;
+
+    // traps
+    if (m.type !== "boss") for (const t of G.traps) {
+      if (!t.used && dist2(m.x, m.y, t.x, t.y) < (m.r + 14) ** 2) { t.used = true; damage(m, 60); m.stun = 2.5; Sound.hit(); spark(t.x, t.y, "#bbb", 8); }
+    }
+  }
+  G.traps = G.traps.filter(t => !t.used);
+
+  // separation
+  const ms = G.mons;
+  for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) {
+    const a = ms[i], b = ms[j];
+    if (a.dead || b.dead) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r, d2 = dx * dx + dy * dy;
+    if (d2 < rr * rr && d2 > 0.01) {
+      const d = Math.sqrt(d2), push = (rr - d) / 2, ux = dx / d, uy = dy / d;
+      const wa = a.type === "boss" ? 0.1 : 1, wb = b.type === "boss" ? 0.1 : 1;
+      a.x -= ux * push * wa; a.y -= uy * push * wa; b.x += ux * push * wb; b.y += uy * push * wb;
+    }
+  }
+
+  // despawn far / daylight
+  G.mons = G.mons.filter(m => {
+    if (m.dead) return false;
+    if (m.guard || m.type === "boss") return true;
+    const d2p = dist2(m.x, m.y, p.x, p.y);
+    if (d2p > 1500 * 1500) return false;
+    if (G.night < 0.2 && m.state !== "chase" && d2p > 750 * 750 && Math.random() < dt * 0.3) return false;
+    if (m.type === "stalker" && G.night < 0.15 && d2p > 500 * 500) return false;
+    return true;
+  });
+}
+
+// --- boss ----------------------------------------------------------------------------
+
+function bossAI(m, dt, d, dx, dy) {
+  const enraged = m.hp < m.max * 0.5;
+  m.sumT -= dt; m.rootT -= dt; m.chargeT -= dt;
+  if (m.sumT <= 0) {
+    m.sumT = enraged ? 6 : 8;
+    for (let i = 0; i < (enraged ? 4 : 3); i++) {
+      const s = freeSpot(m.x, m.y, 60, 160, false, false);
+      if (s) { const c = spawnMonster(Math.random() < 0.7 ? "crawler" : "ghoul", s.x, s.y, { guard: true }); c.aggro = 99; spark(s.x, s.y, "#2a1a10", 12, 120, 0.6, 4); }
+    }
+    Sound.growl(0.5, 0.4);
+  }
+  if (m.rootT <= 0) {
+    m.rootT = enraged ? 5 : 7.5;
+    const ux = dx / d, uy = dy / d;
+    for (let i = 1; i <= 12; i++) G.roots.push({ x: m.x + ux * i * 48 + (Math.random() - 0.5) * 14, y: m.y + uy * i * 48 + (Math.random() - 0.5) * 14, t: 0.9 + i * 0.05, life: 0.6, hit: false });
+  }
+  if (enraged) {
+    if (m.chargeT <= 0 && d > 150) { m.chargeT = 9; m.charge = 1.0; Sound.bossRoar(); }
+    m.darkT -= dt;
+    if (m.darkT <= 0) { m.darkT = 16; G.lightOff = 3.2; Sound.scream(); toast("Фонарь гаснет…", 2); }
+  }
+}
+
+function updateRoots(dt) {
+  const p = G.p;
+  for (const r of G.roots) {
+    if (r.t > 0) { r.t -= dt; if (r.t <= 0) { spark(r.x, r.y, "#3a2a18", 6, 140, 0.5, 3); if (!r.hit && dist2(r.x, r.y, p.x, p.y) < 34 * 34) { r.hit = true; hurt(28); } } }
+    else r.life -= dt;
+  }
+  G.roots = G.roots.filter(r => r.t > 0 || r.life > 0);
+}
+
+function startBoss() {
+  G.step = 6;
+  G.placed = true;
+  const a = World.altar;
+  const b = spawnMonster("boss", a.x, a.y - 260, { guard: true, aggro: 99 });
+  G.boss = b;
+  Sound.bossRoar(); Sound.sting();
+  G.shake = 20;
+  toast("Из чащи выходит Хозяин леса", 4);
+  save();
+}
+
+function bossDefeated() {
+  G.bossDead = true; G.step = 7; G.endT = 4;
+  for (const m of G.mons) if (m !== G.boss) { m.dead = true; spark(m.x, m.y, "#222", 10, 80, 0.8, 4); }
+  Sound.bossRoar();
+  G.shake = 25;
+  toast("Хозяин леса повержен", 4);
+}
+
+// --- projectiles, fire, drops ------------------------------------------------------
+
+function pointBlocked(x, y) {
+  for (const R of World.walls) if (x > R.x && x < R.x + R.w && y > R.y && y < R.y + R.h) return true;
+  for (const o of gridQuery(x, y, 20)) if (o.block && o.type !== "bush" && dist2(x, y, o.x, o.y) < o.r * o.r) return true;
+  return false;
+}
+
+function updateProjs(dt) {
+  const p = G.p;
+  for (const pr of G.projs) {
+    if (pr.kind === "bottle") {
+      pr.t += dt;
+      const k = Math.min(1, pr.t / pr.dur);
+      pr.x = lerp(pr.sx, pr.tx, k); pr.y = lerp(pr.sy, pr.ty, k); pr.h = Math.sin(k * Math.PI) * 40;
+      if (k >= 1 || pointBlocked(pr.x, pr.y)) {
+        pr.dead = true;
+        G.projs.push({ kind: "firezone", x: pr.x, y: pr.y, r: 85, life: 7, max: 7 });
+        Sound.glass(); Sound.fire(); makeNoise(pr.x, pr.y, 400);
+        spark(pr.x, pr.y, "#ffb040", 30, 220, 0.7, 3);
+      }
+      continue;
+    }
+    if (pr.kind === "firezone") {
+      pr.life -= dt;
+      if (Math.random() < dt * 30) G.parts.push({ x: pr.x + (Math.random() - 0.5) * pr.r * 1.6, y: pr.y + (Math.random() - 0.5) * pr.r * 1.6, vx: 0, vy: -40 - Math.random() * 40, life: 0.6, max: 0.6, col: Math.random() < 0.5 ? "#ff8a20" : "#ffd060", size: 3, glow: true });
+      if (dist2(p.x, p.y, pr.x, pr.y) < pr.r * pr.r) hurt(8);
+      if (pr.life <= 0) pr.dead = true;
+      continue;
+    }
+    pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.life -= dt;
+    if (pr.life <= 0 || pointBlocked(pr.x, pr.y)) { pr.dead = true; if (pr.kind === "bolt") G.drops.push({ x: pr.x - pr.vx * 0.02, y: pr.y - pr.vy * 0.02, item: "bolts", q: 1, t: 60 }); continue; }
+    if (pr.kind === "acid") {
+      if (dist2(pr.x, pr.y, p.x, p.y) < (p.r + 6) ** 2) { pr.dead = true; hurt(pr.dmg); spark(pr.x, pr.y, "#9fd02a", 10); }
+      if (Math.random() < 0.5) G.parts.push({ x: pr.x, y: pr.y, vx: 0, vy: 0, life: 0.3, max: 0.3, col: "#9fd02a", size: 3 });
+    } else if (pr.kind === "bolt") {
+      for (const m of G.mons) {
+        if (m.dead || pr.hit.includes(m)) continue;
+        if (dist2(pr.x, pr.y, m.x, m.y) < (m.r + 4) ** 2) {
+          pr.hit.push(m); damage(m, pr.dmg, pr.vx * 0.15, pr.vy * 0.15);
+          if (--pr.pierce <= 0) { pr.dead = true; break; }
+        }
+      }
+    }
+  }
+  G.projs = G.projs.filter(p => !p.dead);
+
+  for (const d of G.drops) {
+    d.t -= dt;
+    const dd = dist2(d.x, d.y, p.x, p.y);
+    if (dd < 90 * 90) { const l = Math.sqrt(dd) || 1; d.x += (p.x - d.x) / l * 200 * dt; d.y += (p.y - d.y) / l * 200 * dt; }
+    if (dd < 22 * 22) { d.t = 0; addItem(d.item, d.q); Sound.pickup(); }
+  }
+  G.drops = G.drops.filter(d => d.t > 0);
+
+  for (const f of G.fires) {
+    f.life -= dt;
+    if (Math.random() < dt * 12) G.parts.push({ x: f.x + (Math.random() - 0.5) * 14, y: f.y + (Math.random() - 0.5) * 8, vx: (Math.random() - 0.5) * 20, vy: -50 - Math.random() * 40, life: 0.9, max: 0.9, col: Math.random() < 0.6 ? "#ff9a30" : "#ffe080", size: 2.5, glow: true });
+  }
+  G.fires = G.fires.filter(f => f.life > 0);
+}
+
+// --- interaction & gathering ---------------------------------------------------------
+
+const GATHER = {
+  tree:  { n: "Рубить дерево", time: () => 1.4 / bestTool("chop"), give: () => [["wood", 1 + (Math.random() < 0.35 ? 1 : 0)]], snd: "chop", regrow: 2 },
+  rock:  { n: "Добывать камень", time: () => 1.3 / bestTool("mine"), give: () => [["stone", 1], ...(Math.random() < 0.2 ? [["scrap", 1]] : [])], snd: "mine", regrow: 3 },
+  bush:  { n: "Собрать травы", time: () => 0.9, give: () => [["herb", 1 + (Math.random() < 0.3 ? 1 : 0)]], snd: "step", regrow: 1 },
+  scrap: { n: "Разобрать металлолом", time: () => 1.5, give: () => [["scrap", 1], ...(Math.random() < 0.18 ? [["powder", 1]] : []), ...(Math.random() < 0.1 ? [["cloth", 1]] : [])], snd: "mine", regrow: 3 },
+};
+
+function findInteract() {
+  const p = G.p;
+  let best = null, bd = 1e9;
+  const fx = p.x + Math.cos(p.a) * 14, fy = p.y + Math.sin(p.a) * 14;
+  for (const o of World.inter) {
+    if (o.taken) continue;
+    if (o.type === "seal" && G.seals.includes(o.seal)) continue;
+    const d = Math.hypot(o.x - fx, o.y - fy);
+    if (d < o.r && d < bd && !wallBetween(p.x, p.y, o.x, o.y)) { bd = d - 10; best = o; }
+  }
+  for (const o of gridQuery(p.x, p.y, 70)) {
+    if (!GATHER[o.type] || o.left <= 0) continue;
+    const d = Math.hypot(o.x - fx, o.y - fy) - o.r;
+    if (d < 30 && d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+
+function interactLabel(o) {
+  if (!o) return "";
+  if (GATHER[o.type]) return GATHER[o.type].n;
+  switch (o.type) {
+    case "note": return "Читать: " + NOTES[o.key].t;
+    case "crate": return o.full ? "Обыскать ящик" : "Пустой ящик";
+    case "bench": return "Верстак — крафт";
+    case "bed": return G.night > 0.45 ? "Спать до утра (сохранение)" : "Сохранить игру";
+    case "pickup": return "Взять: " + o.label;
+    case "seal": return "Взять: " + o.label;
+    case "altar": return G.placed ? "Алтарь" : "Положить печати на алтарь";
+    case "car": return o.full ? "Обыскать багажник" : "Машина";
+  }
+  return "";
+}
+
+function isHoldAction(o) { return !!GATHER[o.type]; }
+
+function doInteract(o) {
+  const p = G.p;
+  switch (o.type) {
+    case "note": UI.showNote(o.key); return;
+    case "crate":
+      if (!o.full) { toast("Пусто. Может, завтра что-то появится…", 2); return; }
+      o.full = false; Sound.pickup();
+      let got = 0;
+      for (const [k, ch, a, b] of CRATE_LOOT) if (Math.random() < ch) { addItem(k, a + Math.floor(Math.random() * (b - a + 1))); got++; }
+      if (!got) addItem("cloth", 1);
+      return;
+    case "bench": UI.openInv(); return;
+    case "bed": return sleep();
+    case "pickup":
+      o.taken = true; giveWeapon(o.weapon);
+      for (const k in o.give) addItem(k, o.give[k], true);
+      const w = WEAPONS[W_IDX[o.weapon]];
+      G.mag[o.weapon] = w.mag;
+      toast(`Получено: ${w.n}`, 3); Sound.craft();
+      return;
+    case "seal":
+      G.seals.push(o.seal); Sound.sting(); G.shake = 10;
+      toast(`${o.label} (${G.seals.length}/3)`, 3);
+      setTimeout(() => toast("Что-то пробудилось…", 3), 900);
+      for (const [type, n] of o.guard) for (let i = 0; i < n; i++) {
+        const s = freeSpot(p.x, p.y, 160, 340, true, false);
+        if (s) { const m = spawnMonster(type, s.x, s.y, { guard: true }); m.aggro = 99; }
+      }
+      if (G.seals.length >= 3 && G.step >= 4 && G.step < 5) { G.step = 5; toast("Все печати собраны. Капище ждёт на севере.", 4); }
+      save();
+      return;
+    case "altar":
+      if (G.placed) { toast("Камни дрожат.", 2); return; }
+      if (G.seals.length < 3) { toast(`Не хватает печатей: ${G.seals.length}/3`, 2.5); return; }
+      if (G.night < 0.6) { toast("Камни молчат. Дождись ночи.", 2.5); return; }
+      startBoss();
+      return;
+    case "car":
+      if (o.full) { o.full = false; addItem("cloth", 2); addItem("battery", 1); addItem("bandage", 1); Sound.pickup(); toast("В багажнике: тряпки, батарейка, бинт.", 3); }
+      else toast("Машина мертва. Аккумулятор сел.", 2);
+      return;
+  }
+}
+
+function finishGather(o) {
+  const g = GATHER[o.type];
+  for (const [k, q] of g.give()) addItem(k, q);
+  o.left--;
+  if (o.left <= 0) { o.regrow = G.day + g.regrow; if (o.type === "rock" || o.type === "scrap") o.block = false; }
+  Sound.pickup();
+}
+
+function sleep() {
+  const p = G.p;
+  if (G.night > 0.45) {
+    if (G.mons.some(m => !m.fake && m.state === "chase" && dist2(m.x, m.y, p.x, p.y) < 900 * 900)) { toast("Нельзя спать — твари рядом!", 2.5); return; }
+    if (G.step === 6) { toast("Не время спать.", 2); return; }
+    UI.fade(() => {
+      if (G.t > 0.5) newDay();
+      G.t = 7 / 24;
+      p.hp = Math.min(100, p.hp + 40); p.san = Math.min(100, p.san + 45); p.sta = 100;
+      G.mons = G.mons.filter(m => m.guard);
+      save();
+      toast(`День ${G.day}. Игра сохранена.`, 3);
+    });
+  } else {
+    save(); toast("Игра сохранена.", 2);
+  }
+}
+
+function newDay() {
+  G.day++;
+  for (const o of World.res) if (o.regrow && o.regrow <= G.day) { o.left = o.max; o.regrow = 0; o.block = o.type !== "bush"; }
+  for (const o of World.inter) if (o.type === "crate" && !o.full && Math.random() < 0.5) o.full = true;
+}
+
+// --- crafting ------------------------------------------------------------------------
+
+function nearBench() {
+  const p = G.p;
+  return World.inter.some(o => o.type === "bench" && dist2(o.x, o.y, p.x, p.y) < 110 * 110);
+}
+
+function craft(r) {
+  if (!has(r.need)) return;
+  if (r.where === "bench" && !nearBench()) { toast("Нужен верстак", 1.5); return; }
+  if (r.w && G.owned.includes(r.out)) return;
+  take(r.need);
+  const p = G.p;
+  if (r.w) {
+    giveWeapon(r.out);
+    const w = WEAPONS[W_IDX[r.out]];
+    if (w.mag) G.mag[r.out] = 0;
+    if (r.out === "crossbow") addItem("bolts", 5, true);
+    toast(`Создано: ${r.n}`, 2.5);
+    if (r.out === "axe" && G.step === 2) { G.step = 3; toast("Теперь — в деревню. Дом старосты на северо-востоке.", 4); save(); }
+  } else if (r.out === "campfire") {
+    G.fires.push({ x: p.x + Math.cos(p.a) * 40, y: p.y + Math.sin(p.a) * 40, life: 240 });
+    toast("Костёр разожжён", 2);
+  } else if (r.out === "trap") {
+    G.traps.push({ x: p.x + Math.cos(p.a) * 40, y: p.y + Math.sin(p.a) * 40 });
+    toast("Капкан установлен", 2);
+  } else addItem(r.out, r.q, true);
+  Sound.craft();
+}
+
+function useItem(k) {
+  const p = G.p;
+  if (!(G.inv[k] > 0)) return false;
+  if (k === "bandage" || k === "medkit") {
+    if (p.hp >= 100) { toast("Здоровье полное", 1.2); return false; }
+    p.hp = Math.min(100, p.hp + (k === "medkit" ? 60 : 25));
+  } else if (k === "tea") {
+    p.san = Math.min(100, p.san + 40);
+  } else if (k === "battery") {
+    if (p.bat > 90) { toast("Батарея почти полная", 1.2); return false; }
+    p.bat = 100;
+  } else return false;
+  G.inv[k]--; Sound.pickup(); toast(`Использовано: ${ITEMS[k].n}`, 1.5);
+  return true;
+}
+function quickHeal() { if (!useItem("medkit") && !(G.inv.medkit > 0)) useItem("bandage"); }
+
+// --- story ---------------------------------------------------------------------------
+
+function readNote(key) {
+  if (!G.notes.includes(key)) G.notes.push(key);
+  if (key === "anya1" && G.step <= 1) { G.step = 2; save(); }
+  if (key === "head" && G.step < 4) { G.step = G.seals.length >= 3 ? 5 : 4; save(); }
+}
+
+function objectiveTarget() {
+  const H = id => World.houses.find(h => h.id === id);
+  switch (G.step) {
+    case 0: case 1: return H("forester").doorPos;
+    case 2: return World.inter.find(o => o.type === "bench");
+    case 3: return H("headman").doorPos;
+    case 4: {
+      const left = World.inter.filter(o => o.type === "seal" && !G.seals.includes(o.seal));
+      let b = null, bd = 1e18;
+      for (const o of left) { const d = dist2(o.x, o.y, G.p.x, G.p.y); if (d < bd) { bd = d; b = o; } }
+      return b;
+    }
+    case 5: return World.altar;
+    case 6: return G.boss;
+  }
+  return null;
+}
+
+function die() {
+  G.state = "dead";
+  Sound.scream();
+  UI.showDead();
+}
+
+// --- main update -------------------------------------------------------------------
+
+function update(dt) {
+  const p = G.p, inp = G.input;
+  G.t += dt / DAY_LEN;
+  if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
+  G.night = nightFactor(G.t);
+
+  // story: entering the forester's house
+  G.inside = insideHouse(p.x, p.y);
+  if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
+  for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; toast(h.name, 2.5); }
+  if (!G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
+
+  // movement
+  let mx = inp.mvX + (inp.right - inp.left), my = inp.mvY + (inp.down - inp.up);
+  const ml = Math.hypot(mx, my);
+  if (ml > 1) { mx /= ml; my /= ml; }
+  p.moving = ml > 0.1;
+  let spd = 150;
+  p.staLock = Math.max(0, p.staLock - dt);
+  if (inp.sprint && p.moving && p.sta > 0 && p.staLock <= 0) { spd = 245; p.sta -= 28 * dt; if (p.sta <= 0) { p.sta = 0; p.staLock = 1.5; } }
+  else p.sta = Math.min(100, p.sta + (p.moving ? 12 : 22) * dt);
+  if (inSwamp(p.x, p.y)) spd *= 0.55;
+  if (p.act) spd *= 0.3;
+  const ox = p.x, oy = p.y;
+  p.x += mx * spd * dt; p.y += my * spd * dt;
+  collide(p);
+  p.vx = (p.x - ox) / dt; p.vy = (p.y - oy) / dt;
+  if (p.moving) { p.stepT -= dt * spd / 150; if (p.stepT <= 0) { p.stepT = 0.38; Sound.step(); } }
+
+  // aim
+  if (inp.touchAim) p.a = Math.atan2(inp.aimDY, inp.aimDX);
+  else if (Input.mouseActive) p.a = Math.atan2(inp.aimY - p.y, inp.aimX - p.x);
+  else if (p.moving) p.a = Math.atan2(my, mx);
+
+  // timers
+  p.atkCd = Math.max(0, p.atkCd - dt);
+  p.iframe = Math.max(0, p.iframe - dt);
+  if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) { p.reloadT = 0; finishReload(); } }
+  G.swingT = Math.max(0, G.swingT - dt);
+  G.flash = Math.max(0, G.flash - dt);
+  G.hurtFlash = Math.max(0, G.hurtFlash - dt);
+  G.lightOff = Math.max(0, G.lightOff - dt);
+  G.shake *= Math.pow(0.004, dt);
+  if (G.noise) { G.noise.t -= dt; if (G.noise.t <= 0) G.noise = null; }
+
+  if (inp.attack && !p.act) attack();
+
+  // flashlight
+  if (p.light && G.lightOff <= 0) {
+    p.bat -= dt * 0.4;
+    if (p.bat <= 0) {
+      p.bat = 0;
+      if (G.inv.battery > 0) { G.inv.battery--; p.bat = 100; toast("Батарейка заменена", 2); Sound.click(); }
+      else { p.light = false; toast("Батарея села! Нужна батарейка", 3); }
+    }
+  }
+  computeRays();
+
+  // interaction (E): press for instant actions, hold for gathering
+  const target = findInteract();
+  G.target = target;
+  if (inp.interact && target) {
+    if (isHoldAction(target)) {
+      if (p.act !== target) { p.act = target; p.actProg = 0; p.actTick = 0; }
+      const time = GATHER[target.type].time();
+      p.actProg += dt; p.actTick -= dt;
+      if (p.actTick <= 0) { p.actTick = 0.35; Sound[GATHER[target.type].snd](); spark(target.x, target.y, target.type === "tree" ? "#8a6a40" : target.type === "bush" ? "#4a7a30" : "#999", 2, 80); makeNoise(p.x, p.y, 320); }
+      if (p.actProg >= time) { finishGather(target); p.actProg = 0; if (target.left <= 0) p.act = null; }
+    } else if (!inp.interactUsed) {
+      inp.interactUsed = true;
+      doInteract(target);
+    }
+  } else { p.act = null; p.actProg = 0; }
+  if (!inp.interact) inp.interactUsed = false;
+
+  // sanity
+  const lightHere = Math.max(1 - G.night, nearFire(p.x, p.y, 240) ? 1 : 0, World.lights.some(l => dist2(p.x, p.y, l.x, l.y) < l.r * l.r) ? 0.8 : 0, p.light && G.lightOff <= 0 ? 0.45 : 0);
+  let dsan = 0;
+  if (lightHere < 0.3) dsan -= 1.1; else if (lightHere < 0.6) dsan -= 0.35 * G.night;
+  if (nearFire(p.x, p.y, 240)) dsan += 2.2;
+  else if (G.night < 0.3) dsan += 0.3;
+  let seen = 0;
+  for (const m of G.mons) if (!m.dead && m.beam && !m.fake && dist2(m.x, m.y, p.x, p.y) < 420 * 420) seen += m.type === "boss" ? 3 : m.type === "stalker" || m.type === "brute" ? 1.5 : 0.6;
+  dsan -= Math.min(2, seen);
+  if (G.boss && !G.bossDead) dsan -= 0.6;
+  p.san = clamp(p.san + dsan * dt, 0, 100);
+  if (p.san <= 0) { p.hp -= 1.5 * dt; if (p.hp <= 0) { p.hp = 0; die(); return; } }
+
+  // hallucinations and whispers
+  if (p.san < 40) {
+    G.hallT -= dt;
+    if (G.hallT <= 0) {
+      G.hallT = 6 + Math.random() * 14 * (p.san / 40 + 0.3);
+      const s = freeSpot(p.x, p.y, 260, 420, false, false);
+      if (s) { const m = spawnMonster(Math.random() < 0.5 ? "ghoul" : "stalker", s.x, s.y, { fake: true, fakeT: 8, aggro: 99 }); m.hp = 1; }
+    }
+    G.whisperT -= dt;
+    if (G.whisperT <= 0) { G.whisperT = 4 + Math.random() * 8; Sound.whisper(); }
+  }
+
+  if (G.state !== "play") return;
+  spawnTick(dt);
+  G.flowT -= dt;
+  if (G.flowT <= 0) { G.flowT = 0.25; updateFlow(p.x, p.y); }
+  updateMonsters(dt);
+  updateRoots(dt);
+  updateProjs(dt);
+
+  for (const q of G.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.92; q.vy *= 0.92; q.life -= dt; }
+  G.parts = G.parts.filter(q => q.life > 0);
+  if (G.parts.length > 600) G.parts.splice(0, G.parts.length - 600);
+  for (const t of G.tracers) t.life -= dt;
+  G.tracers = G.tracers.filter(t => t.life > 0);
+  for (const d of G.decals) d.a -= dt * 0.004;
+  G.decals = G.decals.filter(d => d.a > 0);
+  for (const m of G.msgs) m.t -= dt;
+  G.msgs = G.msgs.filter(m => m.t > 0);
+
+  if (G.endT > 0) { G.endT -= dt; if (G.endT <= 0) { G.state = "end"; UI.showEnd(p.san >= 30); try { localStorage.removeItem(SAVE_KEY); } catch (e) {} } }
+
+  const fear = clamp(Math.max((100 - p.hp) / 100, (60 - p.san) / 60, G.mons.some(m => m.state === "chase" && !m.fake && dist2(m.x, m.y, p.x, p.y) < 300 * 300) ? 0.55 : 0), 0, 1);
+  Sound.update(dt, G.night, fear, true);
+}
+
+function computeRays() {
+  const p = G.p;
+  G.rays.length = 0;
+  if (!p.light || G.lightOff > 0) return;
+  const bl = nearBlockers(p.x, p.y, FLASH_RANGE);
+  G.rayBl = bl;
+  for (let i = 0; i < FLASH_RAYS; i++) {
+    const a = p.a - FLASH_HALF + (i / (FLASH_RAYS - 1)) * FLASH_HALF * 2;
+    G.rays.push(castRay(p.x, p.y, a, FLASH_RANGE, bl));
+  }
+}

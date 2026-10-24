@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#050605">
+<meta name="color-scheme" content="dark only">
+<title>Чёрная Сосна</title>
+<meta name="description" content="Хоррор-выживание в ночном лесу: добывай ресурсы, крафти оружие, убивай тварей и найди пропавшую сестру.">
+<link rel="icon" type="image/png" href="../icons/favicon-32.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="fade"></div>
+
+<div id="title" class="screen" hidden>
+  <div class="title-box">
+    <h1>ЧЁРНАЯ<br>СОСНА</h1>
+    <p class="sub">хоррор-выживание</p>
+    <div class="menu">
+      <button class="btn" id="continue" hidden>Продолжить</button>
+      <button class="btn" id="new">Новая игра</button>
+      <button class="btn ghost" id="help-btn">Управление</button>
+    </div>
+    <p class="hint">Играть лучше в наушниках и в темноте.</p>
+  </div>
+</div>
+
+<div id="intro" class="screen intro" hidden>
+  <p id="intro-t"></p>
+  <small>нажми, чтобы продолжить</small>
+</div>
+
+<div id="help" class="panel" hidden>
+  <div class="box">
+    <h2>Управление</h2>
+    <div class="cols">
+      <ul class="keys">
+        <li><kbd>W A S D</kbd> идти</li>
+        <li><kbd>Shift</kbd> бег</li>
+        <li><kbd>Мышь</kbd> целиться, <kbd>ЛКМ</kbd> атака</li>
+        <li><kbd>E</kbd> действие (держать — рубить/копать)</li>
+        <li><kbd>F</kbd> фонарь</li>
+        <li><kbd>R</kbd> перезарядка</li>
+        <li><kbd>1–8</kbd>, <kbd>Q</kbd>, колесо — оружие</li>
+        <li><kbd>Tab</kbd> / <kbd>I</kbd> сумка и крафт</li>
+        <li><kbd>H</kbd> лечение, <kbd>G</kbd> отвар, <kbd>B</kbd> батарейка</li>
+        <li><kbd>J</kbd> журнал, <kbd>M</kbd> карта, <kbd>Esc</kbd> пауза</li>
+      </ul>
+      <div>
+        <p><b>На телефоне:</b> левая половина экрана — стик движения (отведи дальше — бег), правая — прицел (оттяни — атака, тап — удар). Кнопки справа: действие, фонарь, перезарядка, смена оружия.</p>
+        <p><b>Советы.</b> Ночью твари сильнее и их больше. Свет фонаря и костры держат рассудок. Если рассудок упадёт — начнутся видения, а потом лес начнёт есть тебя. Спать и сохраняться можно в кровати в доме лесника.</p>
+        <p>Тень замирает, когда на неё светят фонарём. Не отворачивайся.</p>
+      </div>
+    </div>
+    <button class="btn" id="help-close">Понятно</button>
+  </div>
+</div>
+
+<div id="note" class="panel" hidden>
+  <div class="box paper">
+    <h2 id="note-t"></h2>
+    <pre id="note-b"></pre>
+    <button class="btn" id="note-close">Закрыть</button>
+  </div>
+</div>
+
+<div id="inv" class="panel" hidden>
+  <div class="box wide">
+    <div class="head"><h2>Сумка</h2><button class="btn ghost small" id="inv-close">✕</button></div>
+    <div class="cols inv">
+      <div>
+        <h3>Ресурсы</h3>
+        <ul id="inv-res" class="res"></ul>
+        <h3>Использовать</h3>
+        <div id="inv-use" class="use"></div>
+      </div>
+      <div>
+        <h3>Крафт</h3>
+        <p id="inv-bench"></p>
+        <ul id="inv-craft" class="craft"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="journal" class="panel" hidden>
+  <div class="box">
+    <h2>Журнал</h2>
+    <ul id="journal-list" class="jl"></ul>
+    <button class="btn" id="journal-close">Закрыть</button>
+  </div>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="title-box">
+    <h2>Пауза</h2>
+    <div class="menu">
+      <button class="btn" id="resume">Продолжить</button>
+      <button class="btn ghost" id="p-journal">Журнал</button>
+      <button class="btn ghost" id="p-help">Управление</button>
+      <button class="btn ghost" id="snd-btn">Звук: вкл</button>
+      <button class="btn ghost" id="to-title">В главное меню</button>
+    </div>
+    <p class="hint">Игра сохраняется, когда спишь в кровати, и на ключевых моментах сюжета.</p>
+  </div>
+</div>
+
+<div id="dead" class="screen dead" hidden>
+  <div class="title-box">
+    <h1>ТЫ ПОГИБ</h1>
+    <p class="sub">Лес забрал ещё одного.</p>
+    <div class="menu">
+      <button class="btn" id="dead-load">Загрузить сохранение</button>
+      <button class="btn ghost" id="dead-new">Новая игра</button>
+    </div>
+  </div>
+</div>
+
+<div id="end" class="screen" hidden>
+  <div class="box paper end">
+    <h2 id="end-t"></h2>
+    <pre id="end-b"></pre>
+    <button class="btn" id="end-title">В главное меню</button>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div id="stickL" class="stick" hidden><i></i></div>
+  <div id="stickR" class="stick" hidden><i></i></div>
+  <div class="tbar top">
+    <button id="t-map" class="tb">🗺</button>
+    <button id="t-inv" class="tb">🎒</button>
+    <button id="t-pause" class="tb">❚❚</button>
+  </div>
+  <div class="tbar side">
+    <button id="t-act" class="tb big">✋</button>
+    <button id="t-swap" class="tb">⇄</button>
+    <button id="t-reload" class="tb">⟳</button>
+    <button id="t-light" class="tb">🔦</button>
+    <button id="t-heal" class="tb">🩹</button>
+    <button id="t-run" class="tb">🏃</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

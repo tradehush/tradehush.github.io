@@ -59,7 +59,12 @@ function initScene() {
 
   V.head = new THREE.SpotLight(0xfff4dc, 0, 1000, 0.6, 0.45, 0);
   s.add(V.head); s.add(V.head.target);
-  for (const l of [V.hemi, V.moon, sp, V.muzzle, V.head, ...V.pool]) l.layers.enableAll();
+  for (const l of [V.hemi, V.moon, V.muzzle, V.head, ...V.pool]) l.layers.enableAll();
+  // the flashlight is right next to the hands and would burn them white: it lights only the world,
+  // and a soft fill light on the view-model layer keeps the hands readable
+  V.vmFill = new THREE.PointLight(0xffe2c8, 1.1, 80, 0);
+  V.vmFill.position.set(-4, 6, 4); V.vmFill.layers.set(1);
+  V.camera.add(V.vmFill);
   V.vm = new THREE.Group();
   V.vm.scale.setScalar(0.6);
   V.camera.add(V.vm);
@@ -1025,45 +1030,249 @@ function dynMesh(obj, make) {
 
 // --- weapon models -----------------------------------------------------------------
 
+// Weapons are modelled with the grip at the origin, the business end along -z and up along +y.
+// userData.grip tells the hand how to hold it: axis "z" (a handle pointing forward) or "y" (a pistol grip).
+const WMAT = {};
+function wmat() {
+  if (WMAT.steel) return WMAT;
+  WMAT.steel = new THREE.MeshPhongMaterial({ color: 0xb8bcc0, shininess: 90, specular: 0x666666 });
+  WMAT.edge = new THREE.MeshPhongMaterial({ color: 0xe0e4e8, shininess: 120, specular: 0x999999 });
+  WMAT.dark = new THREE.MeshPhongMaterial({ color: 0x1c1c1e, shininess: 50, specular: 0x333333 });
+  WMAT.black = lam(0x121212);
+  WMAT.wood = lam(0x7a5434, { map: V.tex.wood });
+  WMAT.woodDark = lam(0x4a3020, { map: V.tex.wood });
+  WMAT.rubber = lam(0x262422);
+  WMAT.brass = new THREE.MeshPhongMaterial({ color: 0xb08a40, shininess: 70 });
+  WMAT.glass = new THREE.MeshPhongMaterial({ color: 0x2e5a34, shininess: 110, specular: 0x88aa88, transparent: true, opacity: 0.85 });
+  WMAT.cloth = lam(0xcfc2a0);
+  WMAT.string = lam(0xd8d0b0);
+  return WMAT;
+}
+// a flat blade from a side profile [length, height] points, extruded to a thickness
+function bladeGeo(pts, thick) {
+  const sh = new THREE.Shape();
+  sh.moveTo(pts[0][0], pts[0][1]);
+  for (const p of pts.slice(1)) sh.lineTo(p[0], p[1]);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.4, bevelSize: thick * 0.5, bevelSegments: 1 });
+  g.translate(0, 0, -thick / 2);
+  g.rotateY(Math.PI / 2); // profile x -> forward (-z)
+  return g;
+}
+
 function gunModel(id) {
-  const g = new THREE.Group();
-  const add = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, lam(c)); m.position.set(x, y, z); g.add(m); return m; };
+  const M = wmat(), g = new THREE.Group();
+  const add = (geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
   const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+  const Cz = (r1, r2, len, seg = 12) => new THREE.CylinderGeometry(r1, r2, len, seg).rotateX(Math.PI / 2);
   switch (id) {
-    case "knife": add(B(2.4, 3, 9), 0x2a2018, 0, 0, 0); add(B(0.8, 3.4, 14), 0xc8c8c8, 0, 0.6, -11); break;
-    case "axe": add(B(2.6, 2.6, 34), 0x6a4a2a, 0, 0, -10); add(B(1.6, 12, 9), 0x9a9a9a, 0, 4, -26); break;
-    case "bat": { add(new THREE.CylinderGeometry(2.6, 1.6, 40, 8).rotateX(Math.PI / 2), 0x7a5a3a, 0, 0, -14); for (let i = 0; i < 5; i++) add(B(0.5, 8, 0.5), 0xcccccc, 0, 0, -22 - i * 3.5).rotation.z = i; break; }
-    case "machete": add(B(2.4, 3, 9), 0x222222, 0, 0, 0); add(B(0.8, 5, 30), 0xc0c0c0, 0, 0.8, -19); break;
-    case "pistol": add(B(3, 3.4, 14), 0x1a1a1a, 0, 1.4, -6); add(B(2.8, 7, 3.6), 0x2a2a2a, 0, -3, -1).rotation.x = 0.25; break;
-    case "shotgun": add(B(3, 3, 34), 0x1a1a1a, 0, 1.4, -16); add(B(2.6, 2.6, 26), 0x222222, 0, -1.2, -14); add(B(3.4, 5, 14), 0x5a3a20, 0, -0.5, 6); break;
-    case "crossbow": add(B(3, 3, 26), 0x5a3a20, 0, 0, -8); add(B(30, 2, 2.4), 0x333333, 0, 0.6, -20); add(B(0.8, 0.8, 22), 0xc8b080, 0, 2, -12); break;
-    case "molotov": add(new THREE.CylinderGeometry(3, 3.4, 12, 10), 0x3a6a40, 0, 0, 0); add(B(1.6, 6, 1.6), 0xd8c8a0, 0, 8, 0); add(new THREE.SphereGeometry(2.2, 6, 6), 0xffa030, 0, 11.5, 0).material = glowMat(0xffa030); break;
+    case "knife": {
+      add(Cz(1.25, 1.35, 7.5, 10), M.rubber, 0, 0, 2.6);
+      for (let i = 0; i < 4; i++) add(new THREE.TorusGeometry(1.32, 0.18, 4, 12), M.black, 0, 0, 0.4 + i * 1.6);
+      add(Cz(1.45, 1.2, 1, 10), M.steel, 0, 0, 6.6);
+      add(B(4.4, 1.1, 0.9), M.steel, 0, 0, -1.4);
+      add(bladeGeo([[0, -1.3], [10, -1.0], [14.5, 0.2], [12.5, 1.25], [0, 1.4]], 0.45), M.steel, 0, 0, -1.8);
+      add(bladeGeo([[0, -1.3], [10, -1.0], [14.5, 0.2], [13.6, -0.2], [9.8, -0.6], [0, -0.85]], 0.2), M.edge, 0, 0, -1.8);
+      g.userData.grip = { axis: "z", r: 1.3, from: 0, to: 5.5 };
+      break;
+    }
+    case "machete": {
+      add(B(2.2, 2.9, 8), M.black, 0, 0, 2.5);
+      for (const z of [0.5, 4.5]) add(Cz(0.4, 0.4, 0.2, 6).rotateY(Math.PI / 2), M.brass, 1.15, 0, z);
+      add(B(3.6, 3.4, 0.8), M.dark, 0, 0, -1.6);
+      add(bladeGeo([[0, -1.6], [22, -1.9], [28, -0.8], [30, 1.0], [27, 2.6], [0, 1.6]], 0.35), M.steel, 0, 0.2, -2);
+      add(bladeGeo([[0, -1.6], [22, -1.9], [28, -0.8], [29.4, 0.2], [27, -0.6], [21.5, -1.2], [0, -1.05]], 0.16), M.edge, 0, 0.2, -2);
+      g.userData.grip = { axis: "z", r: 1.4, from: 0, to: 5.5 };
+      break;
+    }
+    case "axe": {
+      add(Cz(1.0, 1.25, 36, 10), M.wood, 0, 0, -11);
+      add(Cz(1.3, 1.3, 2, 10), M.woodDark, 0, 0, 6.5);
+      const head = new THREE.Group(); head.position.set(0, 0, -27); g.add(head);
+      const hb = new THREE.Mesh(B(2.4, 4.2, 4.2), M.dark); hb.position.y = 1; head.add(hb);
+      const wedge = new THREE.Mesh(bladeGeo([[-2, 0], [2, 0], [4.5, 8.5], [-4.5, 8.5]], 0.9), M.dark); wedge.position.y = 2.6; head.add(wedge);
+      const edge = new THREE.Mesh(B(0.5, 0.8, 9.2), M.edge); edge.position.set(0, 11.2, 0); head.add(edge);
+      const poll = new THREE.Mesh(B(2.6, 2.4, 3.2), M.dark); poll.position.y = -1.6; head.add(poll);
+      g.userData.grip = { axis: "z", r: 1.2, from: 0, to: 5.5 };
+      break;
+    }
+    case "bat": {
+      const prof = [[0, -8], [1.2, -8], [1.35, -2], [1.6, 8], [2.4, 18], [2.9, 28], [2.7, 31], [0, 31.5]].map(([r, y]) => new THREE.Vector2(r, y));
+      add(new THREE.LatheGeometry(prof, 12).rotateX(-Math.PI / 2), M.wood, 0, 0, 2);
+      add(Cz(1.7, 1.7, 1.2, 12), M.woodDark, 0, 0, 10.2);
+      add(Cz(1.45, 1.45, 6, 10), M.rubber, 0, 0, 3.5);
+      for (let i = 0; i < 9; i++) { const a = i * 2.4, z = -18 - (i % 3) * 3.4; const n = add(new THREE.CylinderGeometry(0.16, 0.12, 5, 5), M.steel, Math.cos(a) * 3, Math.sin(a) * 3, z); n.rotation.set(0, 0, a - Math.PI / 2); }
+      g.userData.grip = { axis: "z", r: 1.45, from: 1, to: 6.5 };
+      break;
+    }
+    case "pistol": {
+      const grip = add(B(2.6, 7.4, 3.6), M.rubber, 0, -0.4, 0.4, -0.22);
+      for (let i = 0; i < 6; i++) add(B(2.7, 0.25, 3.7), M.black, 0, -3.2 + i * 1.1, 0.4 + (-3.2 + i * 1.1) * 0.22, -0.22);
+      add(B(2.4, 0.6, 3.4), M.dark, 0, -4.2, 1.3, -0.22);
+      add(B(2.5, 1.9, 13), M.dark, 0, 3.9, -4.6);
+      add(B(2.7, 2.4, 14.6), M.dark, 0, 5.9, -5.0);
+      for (let i = 0; i < 6; i++) add(B(2.8, 1.8, 0.25), M.black, 0, 6.0, 0.4 + i * 0.6 - 3.6 + 3.2);
+      add(B(2.2, 0.5, 4), M.black, 0, 7.2, -9.5);
+      add(Cz(0.75, 0.75, 1, 10), M.black, 0, 5.7, -12.4);
+      add(B(0.5, 0.9, 0.6), M.dark, 0, 7.5, -11.6);
+      add(B(2.0, 0.9, 0.6), M.dark, 0, 7.5, 1.6);
+      const tg = add(new THREE.TorusGeometry(1.7, 0.32, 5, 12, Math.PI), M.dark, 0, 2.9, -2.4, 0, Math.PI / 2, Math.PI);
+      add(B(0.5, 1.6, 0.5), M.black, 0, 2.3, -2.2, 0.3);
+      add(B(0.8, 1.2, 0.8), M.dark, 0, 6.2, 2.4, -0.4);
+      g.userData.grip = { axis: "y", r: 1.6, from: -3.2, to: 2.2, tilt: -0.22, trigger: [0, 2.4, -2.3] };
+      g.userData.muzzle = [0, 5.7, -13];
+      break;
+    }
+    case "shotgun": {
+      add(B(2.6, 6.6, 3.4), M.woodDark, 0, -1.2, 0.6, -0.35);
+      add(new THREE.Mesh(bladeGeo([[-1, 0], [14, -3.2], [15, -1.6], [15, 3.6], [-1, 3.6]], 2.4).rotateY(Math.PI), M.wood).geometry, M.wood, 0, 1.0, 1.4);
+      add(B(2.9, 1.0, 3), M.rubber, 0, 1.6, 16.4);
+      add(B(3.0, 4.2, 11), M.dark, 0, 3.6, -4.2);
+      add(B(1.2, 0.6, 1.6), M.steel, 1.6, 4.4, -4);
+      add(Cz(0.85, 0.85, 30, 12), M.dark, 0, 4.8, -24.5);
+      add(Cz(0.75, 0.75, 22, 10), M.dark, 0, 3.0, -20.5);
+      const pump = add(Cz(1.45, 1.45, 9, 12), M.woodDark, 0, 3.1, -22);
+      for (let i = 0; i < 7; i++) add(new THREE.TorusGeometry(1.48, 0.15, 4, 12), M.black, 0, 3.1, -18.4 - i * 1.2);
+      add(B(0.5, 0.8, 0.5), M.brass, 0, 5.9, -39);
+      add(new THREE.TorusGeometry(1.6, 0.3, 5, 12, Math.PI), M.dark, 0, 1.6, -2.4, 0, Math.PI / 2, Math.PI);
+      add(B(0.5, 1.4, 0.5), M.black, 0, 1.4, -2.2, 0.3);
+      g.userData.grip = { axis: "y", r: 1.5, from: -3.6, to: 1.6, tilt: -0.35, trigger: [0, 1.4, -2.2] };
+      g.userData.muzzle = [0, 4.8, -40];
+      break;
+    }
+    case "crossbow": {
+      add(B(2.4, 6.4, 3.2), M.woodDark, 0, -1.0, 0.6, -0.3);
+      add(B(3.0, 2.8, 28), M.wood, 0, 2.6, -7);
+      add(new THREE.Mesh(bladeGeo([[-1, 0], [12, -2.6], [13, -1], [13, 3], [-1, 3]], 2.2).rotateY(Math.PI), M.wood).geometry, M.wood, 0, 1.2, 6);
+      add(B(1.0, 0.5, 20), M.dark, 0, 4.2, -10);
+      // limbs swept back from the front of the stock, string from the tips to the latch
+      const front = new THREE.Vector3(0, 3.6, -21), latch = new THREE.Vector3(0, 4.3, -3.5);
+      for (const sd of [-1, 1]) {
+        const mid = new THREE.Vector3(sd * 7, 3.6, -21.6), tip = new THREE.Vector3(sd * 13.5, 3.6, -19.6);
+        g.add(rod(front, mid, 0.85, M.dark), rod(mid, tip, 0.6, M.dark), rod(tip, latch, 0.14, M.string));
+      }
+      add(Cz(0.35, 0.35, 18, 6), M.wood, 0, 4.7, -12);
+      add(new THREE.ConeGeometry(0.6, 2.4, 6).rotateX(-Math.PI / 2), M.steel, 0, 4.7, -22);
+      for (const sd of [-1, 1]) add(B(0.1, 1.2, 1.6), M.cloth, sd * 0.5, 4.9, -3.5);
+      add(new THREE.TorusGeometry(1.5, 0.3, 5, 12, Math.PI), M.dark, 0, 1.8, -2.2, 0, Math.PI / 2, Math.PI);
+      g.userData.grip = { axis: "y", r: 1.5, from: -3.4, to: 1.8, tilt: -0.3, trigger: [0, 1.6, -2.0] };
+      break;
+    }
+    case "molotov": {
+      const prof = [[0, -6], [3.0, -6], [3.3, -5.4], [3.3, 2.4], [2.4, 4.6], [1.1, 5.6], [1.0, 9.2], [1.25, 9.6], [0, 9.6]].map(([r, y]) => new THREE.Vector2(r, y));
+      add(new THREE.LatheGeometry(prof, 14), M.glass, 0, 0, 0);
+      add(new THREE.CylinderGeometry(3.05, 3.05, 5.4, 14), lam(0x6a4a20, { transparent: true, opacity: 0.55 }), 0, -3.2, 0);
+      add(new THREE.CylinderGeometry(1.05, 1.15, 2.2, 8), M.cloth, 0, 9.8, 0);
+      const rag = add(new THREE.ConeGeometry(1.2, 4, 6), M.cloth, 0.8, 12, 0.3, 0.3, 0, -0.5);
+      const fl = add(new THREE.ConeGeometry(1.4, 4.2, 7), glowMat(0xffa030), 1.2, 15, 0.3);
+      const fl2 = add(new THREE.ConeGeometry(0.8, 2.6, 7), glowMat(0xfff0a0), 1.2, 14.4, 0.3);
+      g.userData.flames = [fl, fl2];
+      g.userData.grip = { axis: "y", r: 3.3, from: -4.5, to: 1.5, tilt: 0 };
+      break;
+    }
   }
+  return g;
+}
+
+function rod(a, b, r, mat) {
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), mat);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+}
+
+// a right or left fist closed around a grip, with the back of the hand, the wrist and the sleeve
+function makeHand(grip, side, opts = {}) {
+  const skin = lam(0x9a7058), crease = lam(0x6a4834), nail = lam(0xb89a88);
+  const sleeve = lam(0x2f3a42, { map: V.tex.concrete }), cuff = lam(0x1e262c);
+  const h = new THREE.Group();
+  const R = grip.r + 0.9, len = Math.max(3.6, grip.to - grip.from - (opts.trigger ? 0.6 : 0));
+  const fist = new THREE.Group(); h.add(fist);
+  const mid = grip.from + len / 2;
+  // the closed fingers: one rounded shell around the handle with creases between the fingers
+  const shell = new THREE.Mesh(new THREE.CapsuleGeometry(R, len * 0.75, 4, 12), skin);
+  fist.add(shell);
+  for (let i = 1; i < 4; i++) {
+    const c = new THREE.Mesh(new THREE.TorusGeometry(R + 0.02, 0.12, 4, 14, Math.PI * 1.1), crease);
+    c.position.y = -len / 2 + (len / 4) * i;
+    c.rotation.set(Math.PI / 2, 0, side > 0 ? Math.PI * 0.9 : -Math.PI * 0.1);
+    fist.add(c);
+  }
+  // knuckles of the curled fingers on the outer side
+  for (let i = 0; i < 4; i++) {
+    const k = new THREE.Mesh(new THREE.SphereGeometry(0.75, 8, 6), skin);
+    k.position.set(0, -len / 2 + (len / 4) * (i + 0.5), 0);
+    k.position.x = grip.axis === "z" ? side * R * 0.55 : 0;
+    k.position.z = grip.axis === "z" ? 0 : -R * 0.85;
+    if (grip.axis === "z") k.position.y += 0; // along the handle
+    fist.add(k);
+  }
+  // back of the hand toward the wrist
+  const back = new THREE.Mesh(new THREE.BoxGeometry(grip.axis === "z" ? 3.0 : 3.2, len * 0.9, 3.4), skin);
+  back.position.set(grip.axis === "z" ? side * (R * 0.7) : 0, 0, grip.axis === "z" ? 0 : R * 0.95);
+  if (grip.axis === "z") back.position.set(side * R * 0.75, 0, R * 0.35); // local z points down once the fist is turned
+  fist.add(back);
+  // thumb
+  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.72, 2.6, 3, 8), skin);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 5), nail);
+  if (grip.axis === "z") { thumb.position.set(-side * 0.4, len / 2 - 1.4, -R * 0.75); thumb.rotation.set(-0.35, 0, -side * 0.25); tip.position.set(-side * 0.7, len / 2 - 0.1, -R * 1.05); }
+  else { thumb.position.set(-side * R * 0.95, len / 2 - 0.9, -0.2); thumb.rotation.set(0.9, 0, side * 0.2); tip.position.set(-side * R * 0.95, len / 2 - 0.1, -1.6); }
+  fist.add(thumb, tip);
+  // orient the fist along the grip
+  if (grip.axis === "z") { fist.rotation.x = Math.PI / 2; fist.position.set(0, 0, mid); }
+  else { fist.position.set(0, mid, 0); fist.rotation.x = grip.tilt || 0; }
+  // index finger along the trigger
+  if (opts.trigger) {
+    const idx = new THREE.Mesh(new THREE.CapsuleGeometry(0.62, 2.2, 3, 6), skin);
+    idx.position.set(side * 0.2, opts.trigger[1] - 0.2, opts.trigger[2] + 0.6);
+    idx.rotation.set(Math.PI / 2 - 0.25, 0, 0);
+    h.add(idx);
+  }
+  // wrist, cuff and sleeve going back and down out of view
+  const wrist = new THREE.Group();
+  if (grip.axis === "z") wrist.position.set(side * (R * 0.8), -R * 0.5, grip.to + 1.0);
+  else wrist.position.set(0, grip.from + 0.8, R + 1.8);
+  h.add(wrist);
+  const fore = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, 5, 10), skin); fore.rotation.x = Math.PI / 2 - 0.55; fore.position.set(0, -1.2, 2.2); wrist.add(fore);
+  const cf = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.45, 1.6, 12), cuff); cf.rotation.x = Math.PI / 2 - 0.55; cf.position.set(0, -2.6, 4.4); wrist.add(cf);
+  const sl = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 3.4, 18, 12), sleeve); sl.rotation.x = Math.PI / 2 - 0.55; sl.position.set(side * 0.4, -6.6, 11.6); wrist.add(sl);
+  return h;
+}
+
+function flashlightModel() {
+  const M = wmat(), g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 10, 12).rotateX(Math.PI / 2), M.dark); body.position.z = 1; g.add(body);
+  for (let i = 0; i < 5; i++) { const k = new THREE.Mesh(new THREE.TorusGeometry(1.38, 0.12, 4, 12), M.black); k.position.z = 2 + i * 0.9; g.add(k); }
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 1.4, 3.2, 14).rotateX(Math.PI / 2), M.dark); head.position.z = -5.4; g.add(head);
+  const bezel = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.6, 16).rotateX(Math.PI / 2), M.dark); bezel.position.z = -7.0; g.add(bezel);
+  const btn = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 1.2), lam(0x3a1a12)); btn.position.set(0, 1.45, -1.6); g.add(btn);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.8, 12).rotateX(Math.PI / 2), M.rubber); tail.position.z = 6.3; g.add(tail);
   return g;
 }
 
 function buildViewModel(id) {
   const vm = V.vm;
-  while (vm.children.length) vm.remove(vm.children[0]);
-  const skin = lam(0xc8a882), sleeve = lam(0x2f3a42);
+  while (vm.children.length) { const c = vm.children[0]; vm.remove(c); }
   const hand = new THREE.Group();
   const w = gunModel(id);
   hand.add(w);
-  const fist = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 6), skin); fist.position.set(0, -1, 1); hand.add(fist);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 22), sleeve); arm.position.set(1, -3, 13); hand.add(arm);
-  hand.position.set(10, -10, -18);
-  if (id === "molotov") hand.position.set(10, -12, -20);
+  const grip = w.userData.grip || { axis: "z", r: 1.3, from: 0, to: 5 };
+  hand.add(makeHand(grip, 1, { trigger: grip.trigger }));
+  // guns sit a little to the right and lower so the sights line up near the centre
+  hand.rotation.order = "YXZ";
+  V.vmBase = grip.axis === "y" ? { x: 9, y: -13, z: -19 } : { x: 10, y: -10, z: -18 };
+  if (id === "molotov") V.vmBase = { x: 10, y: -14, z: -21 };
+  hand.position.set(V.vmBase.x, V.vmBase.y, V.vmBase.z);
   vm.add(hand);
+  V.vmFlames = w.userData.flames || null;
   // left hand with the flashlight
   const left = new THREE.Group();
-  const torch = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 12, 10).rotateX(Math.PI / 2), lam(0x2a2a2a)); left.add(torch);
-  V.lens = new THREE.Mesh(new THREE.CircleGeometry(1.8, 10), glowMat(0xfff0c0)); V.lens.position.z = -6.05; left.add(V.lens);
-  const lf = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 6), skin); lf.position.set(0, -1, 1); left.add(lf);
-  const la = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 22), sleeve); la.position.set(-1, -3, 13); left.add(la);
+  left.add(flashlightModel());
+  V.lens = new THREE.Mesh(new THREE.CircleGeometry(1.85, 14), glowMat(0xfff0c0)); V.lens.position.z = -7.32; V.lens.rotation.y = Math.PI; left.add(V.lens);
+  left.add(makeHand({ axis: "z", r: 1.35, from: -1.5, to: 4.5 }, -1));
   left.position.set(-11, -11, -20);
   vm.add(left);
   vm.userData = { hand, left };
-  // view model draws over everything and ignores fog
   // the view model lives on layer 1 and is drawn in a second pass over the cleared depth
   vm.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.fog = false; } o.layers.set(1); });
   V.vmId = id;
@@ -1521,16 +1730,18 @@ function syncCamera(dt) {
   if (G.kick) { V.kick = 1; G.kick = 0; }
   const w = curW();
   const bx = Math.sin(V.bobT * 0.5) * (moving ? 1.2 : 0.3), by = Math.abs(Math.cos(V.bobT * 0.5)) * (moving ? 1.2 : 0.3);
-  hand.position.set(10 + bx, -10 - by, -18 + V.kick * 4);
+  const base = V.vmBase || { x: 10, y: -10, z: -18 };
+  hand.position.set(base.x + bx, base.y - by, base.z + V.kick * 4);
   hand.rotation.set(V.kick * 0.25, 0, 0);
   if (w.kind === "melee") {
     const k = G.swingT > 0 ? 1 - G.swingT / 0.18 : 1;
     const s = G.swingT > 0 ? Math.sin(k * Math.PI) : 0;
     hand.rotation.set(-0.3 - s * 0.6, 0.4 - (G.swingT > 0 ? (k - 0.5) * 2.4 : 0), s * 0.6);
-    hand.position.x = 10 + bx - s * 8; hand.position.z = -18 - s * 8;
+    hand.position.x = base.x + bx - s * 8; hand.position.z = base.z - s * 8;
   }
-  if (p.reloadT > 0) { const k = 1 - p.reloadT / w.reload; hand.rotation.x = -Math.sin(k * Math.PI) * 0.9; hand.position.y = -10 - Math.sin(k * Math.PI) * 6; }
+  if (p.reloadT > 0) { const k = 1 - p.reloadT / w.reload; hand.rotation.x = -Math.sin(k * Math.PI) * 0.9; hand.position.y = base.y - Math.sin(k * Math.PI) * 6; }
   if (p.act) { const s = Math.sin(V.time * 18); hand.rotation.x = -0.4 + s * 0.4; }
+  if (V.vmFlames) V.vmFlames.forEach(f => { const k = 0.8 + Math.random() * 0.4; f.scale.set(k, 0.9 + Math.random() * 0.3, k); });
   left.position.set(-11 - bx * 0.6 - V.lagX * 6, -11 - by + V.lagY * 6, -20);
   left.rotation.set(V.lagY, -V.lagX, 0);
 }

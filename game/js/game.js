@@ -1107,6 +1107,8 @@ function update(dt) {
   p.atkCd = Math.max(0, p.atkCd - dt);
   p.iframe = Math.max(0, p.iframe - dt);
   if (p.reloadT > 0) { p.reloadT -= dt; if (p.reloadT <= 0) { p.reloadT = 0; finishReload(); } }
+  // an empty gun reloads by itself when there is ammo
+  { const w = curW(); if (w.mag && !(G.mag[w.id] > 0) && G.inv[w.ammo] > 0 && p.reloadT <= 0 && !G.drive) startReload(); }
   G.swingT = Math.max(0, G.swingT - dt);
   G.flash = Math.max(0, G.flash - dt);
   G.hurtFlash = Math.max(0, G.hurtFlash - dt);

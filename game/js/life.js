@@ -29,7 +29,7 @@ function carInteract() {
 }
 
 function enterCar() {
-  G.drive = true; G.place = null; G.fishing = null;
+  G.drive = true; cancelPlace(); G.fishing = null;
   G.p.a = G.car.a; G.p.pitch = 0;
   Sound.engineStart();
   tip("drive", Input.touch ? "Левый стик: вперёд/назад и поворот. ✋ — выйти из машины." : "W/S — газ и тормоз, A/D — руль, E — выйти.", Input.touch ? "✋" : "E");
@@ -152,18 +152,40 @@ function startPlace(k) {
   tip("place", Input.touch ? "Повернись туда, где строить. ✔ — поставить, ⟲ — повернуть, ✕ — закончить." : "ЛКМ — поставить, R — повернуть, Esc — закончить.", Input.touch ? "✔" : "ЛКМ");
 }
 
+// hold ✋ on a build to pick it up; then put it elsewhere, or throw it away for half the materials back
+function pickUpBuild(b) {
+  if (G.place || !G.builds.includes(b)) return;
+  removeBuild(b);
+  G.place = { k: b.k, rot: b.rot, x: b.x, y: b.y, ok: false, move: b };
+  Sound.chop();
+  tip("carry", Input.touch ? "✔ — поставить здесь, ⟲ — повернуть, 🗑 — убрать совсем, ✕ — вернуть на место." : "ЛКМ — поставить, R — повернуть, Delete — убрать совсем, Esc — вернуть на место.", Input.touch ? "✔" : "ЛКМ");
+}
+function cancelPlace() {
+  const pl = G.place;
+  G.place = null;
+  if (pl && pl.move) { const b = pl.move; b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R); G.builds.push(b); }
+}
+function trashCarried() {
+  const pl = G.place;
+  if (!pl || !pl.move) return;
+  const d = BDEF[pl.k];
+  for (const k in d.need) if (Math.floor(d.need[k] / 2) > 0) addItem(k, Math.floor(d.need[k] / 2), true);
+  G.place = null; Sound.chop(); toast(`${d.n} убран`, 1.5);
+}
+
 function updatePlacement() {
   const pl = G.place, p = G.p, d = BDEF[pl.k];
   pl.x = Math.round((p.x + Math.cos(p.a) * 90) / 10) * 10;
   pl.y = Math.round((p.y + Math.sin(p.a) * 90) / 10) * 10;
   const R = buildRect(pl);
-  let ok = inBase(pl.x, pl.y) && canAfford(d.need);
+  const paid = !!pl.move;
+  let ok = inBase(pl.x, pl.y) && (paid || canAfford(d.need));
   if (ok) for (const o of rectsIn(R.x, R.y, R.x + R.w, R.y + R.h)) if (!(R.x + R.w <= o.x || R.x >= o.x + o.w || R.y + R.h <= o.y || R.y >= o.y + o.h)) { ok = false; break; }
   if (ok) for (const o of gridQuery(pl.x, pl.y, 60)) if (o.block && circleRect(o.x, o.y, o.r, R)) { ok = false; break; }
   if (ok && inSwamp(pl.x, pl.y)) ok = false;
   if (ok && !d.soft && circleRect(p.x, p.y, p.r + 2, R)) ok = false;
   pl.ok = ok;
-  pl.why = !inBase(pl.x, pl.y) ? "далеко от базы" : !canAfford(d.need) ? "не хватает ресурсов" : ok ? "" : "мешает";
+  pl.why = !inBase(pl.x, pl.y) ? "далеко от базы" : !paid && !canAfford(d.need) ? "не хватает ресурсов" : ok ? "" : "мешает";
 }
 
 function placeBuild() {
@@ -171,25 +193,32 @@ function placeBuild() {
   if (!pl) return;
   if (!pl.ok) { toast(pl.why ? "Нельзя: " + pl.why : "Нельзя поставить здесь", 1.5); Sound.click(); return; }
   const d = BDEF[pl.k];
+  if (pl.move) {
+    const b = pl.move; b.x = pl.x; b.y = pl.y; b.rot = pl.rot;
+    b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R);
+    G.builds.push(b); G.place = null; Sound.chop();
+    return;
+  }
   take(d.need);
   const b = { k: pl.k, x: pl.x, y: pl.y, rot: pl.rot, hp: d.hp, ammo: 0 };
   b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R);
   G.builds.push(b);
   Sound.chop(); Sound.craft();
+  tip("move", `Постройку можно переставить или убрать: держи ${Input.touch ? "✋" : "E"} на ней.`, Input.touch ? "✋" : "E");
   if (!canAfford(d.need)) { G.place = null; toast("Ресурсы кончились", 1.5); }
 }
 
 function buildLabel(b) {
   const d = BDEF[b.k];
-  if (b.k === "turret") return `Зарядить турель (патроны: ${b.ammo})`;
+  if (b.k === "turret") return `Зарядить турель (${b.ammo}) · держи — переставить`;
   if (b.k === "garden") return !b.plant ? "Посадить семена" : b.grow >= 1 ? "Собрать урожай" : `Растёт… ${Math.floor((b.grow || 0) * 100)}%`;
   if (b.k === "stove") return "Печь — готовить";
   if (b.k === "bed") return G.night > 0.45 ? "Спать до утра (сохранение)" : "Сохранить игру";
   if (b.k === "bench") return "Верстак — крафт";
   if (b.k === "light") return "Прожектор";
-  return `${d.n}: держи, чтобы разобрать`;
+  return `${d.n}: держи — переставить или убрать`;
 }
-function buildHold(b) { return ["fence", "wall", "gate", "spikes", "light"].includes(b.k); }
+const BUILD_HOLD = 0.6;
 
 function buildUse(b) {
   if (b.k === "turret") {
@@ -202,13 +231,9 @@ function buildUse(b) {
     else toast("Ещё не выросло", 1.2);
   } else if (b.k === "stove" || b.k === "bench") UI.openInv();
   else if (b.k === "bed") sleep();
+  else toast(`Держи ${Input.touch ? "✋" : "E"}, чтобы переставить или убрать`, 1.6);
 }
 
-function unbuild(b) {
-  const d = BDEF[b.k];
-  for (const k in d.need) if (Math.floor(d.need[k] / 2) > 0) addItem(k, Math.floor(d.need[k] / 2), true);
-  removeBuild(b); Sound.chop(); toast(`${d.n} разобран`, 1.5);
-}
 
 function updateBuilds(dt) {
   for (const b of G.builds) {

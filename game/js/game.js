@@ -100,6 +100,7 @@ function applyMap(m) {
 }
 
 function save() {
+  cancelPlace();
   try {
     const p = G.p;
     G.maps[World.map] = snapMap();
@@ -133,6 +134,7 @@ function load() {
 
 // move to another location through an exit
 function travel(to) {
+  cancelPlace();
   const from = World.map;
   G.maps[from] = snapMap();
   G.state = "travel";
@@ -751,7 +753,7 @@ function interactLabel(o) {
   return "";
 }
 
-function isHoldAction(o) { return !!GATHER[o.type] || (o.type === "build" && buildHold(o.b)); }
+function isHoldAction(o) { return !!GATHER[o.type]; }
 
 function doInteract(o) {
   const p = G.p;
@@ -811,7 +813,7 @@ function doInteract(o) {
       return;
     case "car": carInteract(); return;
     case "airdrop": openAirdrop(o); return;
-    case "build": buildUse(o.b); return;
+    case "build": return;
     case "fishing": startFishing(o); return;
     case "loot":
       o.taken = true;
@@ -1053,13 +1055,14 @@ function update(dt) {
   G.night = World.indoor ? 1 : nightFactor(G.t);
   G.clock = (G.clock || 0) + dt;
 
-  // weather: storms come and go; lightning is mostly for show but also lights the forest
+  // weather: mostly clear and sunny by day; now and then fog rolls in or a thunderstorm comes
   G.stormT -= dt;
   if (G.stormT <= 0) {
-    G.stormOn = !G.stormOn;
-    G.stormT = G.stormOn ? 90 + Math.random() * 120 : 160 + Math.random() * 260;
-    if (G.stormOn) toast("Начинается гроза", 3);
+    G.wx = (G.wx || "clear") !== "clear" ? "clear" : Math.random() < 0.5 ? "fog" : "rain";
+    G.stormOn = G.wx === "rain";
+    G.stormT = G.wx === "clear" ? 260 + Math.random() * 320 : 100 + Math.random() * 140;
   }
+  G.wfog = clamp((G.wfog || 0) + (G.wx === "fog" ? 1 : -1) * dt * 0.06, 0, 1);
   G.storm = clamp(G.storm + (G.stormOn ? 1 : -1) * dt * 0.08, 0, 1);
   Sound.rain(World.indoor ? 0 : G.inside ? G.storm * 0.4 : G.storm);
   G.bolt = Math.max(0, G.bolt - dt);
@@ -1162,13 +1165,25 @@ function update(dt) {
   if ((G.inv.fang || 0) > 0) tip("fang", "Клыки тварей нужны для мачете и капканов.");
   if (G.mons.some(m => m.beam && !m.fake && m.type === "stalker")) tip("stalker", "Это Тень. Пока свет фонаря на ней — она не двигается. Не отворачивайся!");
   else if (G.mons.some(m => m.beam && !m.fake)) tip("monster", `Тварь! Бей — ${K("⚔", "ЛКМ")}. Выстрелы громкие и приманивают других.`);
-  if (inp.interact && target && !G.drive && !G.fishing) {
+  // builds: a tap uses them, holding picks them up to move or remove
+  if (p.act && p.act.type === "build" && (!inp.interact || !target || target.b !== p.act.b)) {
+    if (!inp.interact && !inp.interactUsed && G.builds.includes(p.act.b)) buildUse(p.act.b);
+    if (!inp.interact) inp.interactUsed = false;
+    p.act = null; p.actProg = 0;
+  }
+  if (inp.interact && target && target.type === "build" && !G.drive && !G.fishing) {
+    if (!inp.interactUsed && !G.place) {
+      if (!p.act || p.act.b !== target.b) { p.act = target; p.actProg = 0; }
+      p.actProg += dt;
+      if (p.actProg >= BUILD_HOLD) { inp.interactUsed = true; p.act = null; p.actProg = 0; pickUpBuild(target.b); }
+    }
+  } else if (inp.interact && target && !G.drive && !G.fishing) {
     if (isHoldAction(target)) {
       if (p.act !== target) { p.act = target; p.actProg = 0; p.actTick = 0; }
-      const time = target.type === "build" ? 1.2 : GATHER[target.type].time();
+      const time = GATHER[target.type].time();
       p.actProg += dt; p.actTick -= dt;
-      if (p.actTick <= 0) { p.actTick = 0.35; if (target.type === "build") Sound.chop(); else { Sound[GATHER[target.type].snd](); spark(target.x, target.y, target.type === "tree" ? "#8a6a40" : target.type === "bush" ? "#4a7a30" : "#999", 2, 80); } makeNoise(p.x, p.y, 320); }
-      if (p.actProg >= time) { if (target.type === "build") { unbuild(target.b); p.act = null; } else { finishGather(target); p.actProg = 0; if (target.left <= 0) p.act = null; } }
+      if (p.actTick <= 0) { p.actTick = 0.35; Sound[GATHER[target.type].snd](); spark(target.x, target.y, target.type === "tree" ? "#8a6a40" : target.type === "bush" ? "#4a7a30" : "#999", 2, 80); makeNoise(p.x, p.y, 320); }
+      if (p.actProg >= time) { finishGather(target); p.actProg = 0; if (target.left <= 0) p.act = null; }
     } else if (!inp.interactUsed) {
       inp.interactUsed = true;
       doInteract(target);

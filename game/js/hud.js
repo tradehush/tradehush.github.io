@@ -171,7 +171,7 @@ function drawHUD(ctx) {
     iconCircle(ctx, x0 + 10 * u, y, 11 * u, icon, u);
     ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(x0 + 24 * u, y - 11 * u, tw + 12 * u, 22 * u);
     ctx.fillStyle = "#efe6c8"; font(12); ctx.fillText(t, x0 + 30 * u, y);
-    if (G.p.act) { const k = G.p.actProg / (G.target.type === "build" ? 1.2 : GATHER[G.target.type] ? GATHER[G.target.type].time() : 1); ctx.strokeStyle = "#e8d8a0"; ctx.lineWidth = 2.5 * u; ctx.beginPath(); ctx.arc(x0 + 10 * u, y, 13 * u, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
+    if (G.p.act) { const k = G.p.actProg / (G.target.type === "build" ? BUILD_HOLD : GATHER[G.target.type] ? GATHER[G.target.type].time() : 1); ctx.strokeStyle = "#e8d8a0"; ctx.lineWidth = 2.5 * u; ctx.beginPath(); ctx.arc(x0 + 10 * u, y, 13 * u, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
   }
 
   // messages: short, small, under the clock
@@ -201,7 +201,7 @@ function drawHUD(ctx) {
   if (G.place) {
     const d = BDEF[G.place.k], need = Object.entries(d.need).map(([k, q]) => `${ITEMS[k].icon}${G.inv[k] || 0}/${q}`).join(" ");
     font(12); ctx.textAlign = "center";
-    const t = `${d.icon} ${d.n}  ${need}`, tw = ctx.measureText(t).width + 24 * u, y = H * 0.68;
+    const t = G.place.move ? `${d.icon} ${d.n} — переставить` : `${d.icon} ${d.n}  ${need}`, tw = ctx.measureText(t).width + 24 * u, y = H * 0.3;
     ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(W / 2 - tw / 2, y - 12 * u, tw, 24 * u);
     ctx.fillStyle = G.place.ok ? "#a8d890" : "#e08070"; ctx.fillText(G.place.ok ? t : t + "  ✕ " + (G.place.why || ""), W / 2, y);
     ctx.textAlign = "left";
@@ -263,12 +263,36 @@ function drawTip(ctx) {
   ctx.globalAlpha = 1;
 }
 
+// map view: zoom 1 shows the whole map, the centre is in world units
+const MapView = {
+  z: 1, cx: 0, cy: 0, btns: [],
+  fit() { return (Math.min(R.W, R.H) / R.dpr - 70) / World.W; },
+  clampC() {
+    const half = Math.min(R.W, R.H) / R.dpr / 2 / (this.fit() * this.z);
+    const lo = Math.min(World.W / 2, half * 0.5), hi = Math.max(World.W / 2, World.W - half * 0.5);
+    this.cx = clamp(this.cx, lo, hi); this.cy = clamp(this.cy, lo, hi);
+  },
+  zoomAt(f, sx, sy) {
+    // keep the world point under (sx, sy) in CSS px where it is
+    const k0 = this.fit() * this.z, nz = clamp(this.z * f, 1, World.W / 1200);
+    const wx = this.cx + (sx - R.W / R.dpr / 2) / k0, wy = this.cy + (sy - R.H / R.dpr / 2) / k0;
+    this.z = nz; const k1 = this.fit() * nz;
+    this.cx = wx - (sx - R.W / R.dpr / 2) / k1; this.cy = wy - (sy - R.H / R.dpr / 2) / k1;
+    this.clampC();
+  },
+  pan(dx, dy) { const k = this.fit() * this.z; this.cx -= dx / k; this.cy -= dy / k; this.clampC(); },
+  open() { this.cx = this.z > 1 ? G.p.x : World.W / 2; this.cy = this.z > 1 ? G.p.y : World.W / 2; this.clampC(); },
+  hit(x, y) { for (const b of this.btns) if (x >= b.x && x <= b.x + b.s && y >= b.y && y <= b.y + b.s) return b.id; return null; },
+};
+
 function drawMap(ctx) {
-  const W = R.W, H = R.H, u = R.dpr;
-  ctx.fillStyle = "rgba(5,6,5,0.88)"; ctx.fillRect(0, 0, W, H);
-  const size = Math.min(W, H) - 80 * u, ox = (W - size) / 2, oy = (H - size) / 2, k = size / World.W;
+  const W = R.W, H = R.H, u = R.dpr, MV = MapView;
+  ctx.fillStyle = "rgba(5,6,5,0.92)"; ctx.fillRect(0, 0, W, H);
+  const k = MV.fit() * MV.z * u, size = World.W * k, ox = W / 2 - MV.cx * k, oy = H / 2 - MV.cy * k;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(ox, oy, size, size); ctx.clip();
   ctx.fillStyle = "#1a2015"; ctx.fillRect(ox, oy, size, size);
-  ctx.strokeStyle = "#3a3222"; ctx.lineWidth = 4 * u; ctx.lineCap = "round";
+  ctx.strokeStyle = "#3a3222"; ctx.lineWidth = Math.max(4 * u, 120 * k); ctx.lineCap = "round";
   for (const r of World.roads) { ctx.beginPath(); ctx.moveTo(ox + r[0][0] * k, oy + r[0][1] * k); for (const pt of r) ctx.lineTo(ox + pt[0] * k, oy + pt[1] * k); ctx.stroke(); }
   ctx.fillStyle = "#0e1714"; for (const s of World.swamp) { ctx.beginPath(); ctx.arc(ox + s.x * k, oy + s.y * k, s.r * k, 0, 7); ctx.fill(); }
   ctx.font = `bold ${11 * u}px ui-monospace, monospace`; ctx.textAlign = "center";
@@ -277,7 +301,7 @@ function drawMap(ctx) {
     ctx.fillStyle = known ? "#6a5238" : "#2a2a24";
     ctx.fillRect(ox + h.x * k, oy + h.y * k, h.w * k, h.h * k);
     ctx.fillStyle = known ? "#d8c890" : "#666";
-    ctx.fillText(known ? h.name : "?", ox + (h.x + h.w / 2) * k, oy + h.y * k - 8 * u);
+    if (MV.z >= 2.5 || World.W <= 6000) ctx.fillText(known ? h.name : "?", ox + (h.x + h.w / 2) * k, oy + h.y * k - 8 * u);
   }
   const a = World.altar;
   if (a) {
@@ -304,8 +328,24 @@ function drawMap(ctx) {
   ctx.save(); ctx.translate(ox + p.x * k, oy + p.y * k); ctx.rotate(p.a);
   ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(8 * u, 0); ctx.lineTo(-5 * u, -5 * u); ctx.lineTo(-5 * u, 5 * u); ctx.fill();
   ctx.restore();
-  ctx.fillStyle = "#d8c890"; ctx.fillText(MAPS[World.map].n.toUpperCase() + " — нажми M / ✕, чтобы закрыть", W / 2, oy - 16 * u);
-  ctx.textAlign = "left";
+  ctx.restore();
+  // scale bar: 100 m = 4000 px
+  let m = 50; for (const v of [100, 250, 500, 1000, 2500]) if (v * 40 * k <= 130 * u) m = v;
+  const bl = m * 40 * k;
+  ctx.fillStyle = "#d8c890"; ctx.fillRect(W - 24 * u - bl, H - 22 * u, bl, 2 * u);
+  ctx.textAlign = "right"; ctx.font = `${10 * u}px ui-monospace, monospace`; ctx.fillText(m + " м", W - 24 * u, H - 28 * u);
+  ctx.textAlign = "center"; ctx.font = `bold ${11 * u}px ui-monospace, monospace`;
+  ctx.fillText(MAPS[World.map].n.toUpperCase(), W / 2, 18 * u);
+  // buttons on the left: zoom in, zoom out, centre on me, close
+  const s = 44, gx = 14, gy = (H / u - 4 * s - 3 * 10) / 2;
+  MV.btns = [["in", "+"], ["out", "−"], ["me", "◎"], ["close", "✕"]].map(([id, l], i) => ({ id, l, x: gx, y: gy + i * (s + 10), s }));
+  ctx.font = `${22 * u}px sans-serif`; ctx.textBaseline = "middle";
+  for (const b of MV.btns) {
+    ctx.fillStyle = "rgba(20,20,16,0.85)"; ctx.strokeStyle = "rgba(216,200,144,0.5)"; ctx.lineWidth = 1.5 * u;
+    ctx.beginPath(); ctx.arc((b.x + s / 2) * u, (b.y + s / 2) * u, s / 2 * u, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#e8dcb0"; ctx.fillText(b.l, (b.x + s / 2) * u, (b.y + s / 2 + 1) * u);
+  }
+  ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
 }
 
 // the jump-scare face, drawn procedurally and shaking

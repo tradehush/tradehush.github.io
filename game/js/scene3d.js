@@ -36,7 +36,7 @@ function initScene() {
   const s = V.scene = new THREE.Scene();
   s.fog = new THREE.Fog(0x020306, 30, 600);
   s.background = new THREE.Color(0x020306);
-  V.camera = new THREE.PerspectiveCamera(72, 1, 1.5, 2600);
+  V.camera = new THREE.PerspectiveCamera(72, 1, 1.5, 3000);
   s.add(V.camera);
 
   V.hemi = new THREE.HemisphereLight(0x9aa6b8, 0x2a2a1e, 1);
@@ -410,7 +410,7 @@ function buildStatic() {
   });
   // the painted canvas is huge; once it is on the GPU the CPU copy can go
   groundTex.onUpdate = () => { const c = groundTex.image; if (c && c.width > 1) { c.width = 1; c.height = 1; } };
-  const gmat = lam(0xffffff, { map: groundTex });
+  const gmat = V.groundMat = lam(0xffffff, { map: groundTex });
   // fine detail texture multiplied over the painted map so the ground is not blurry up close
   gmat.onBeforeCompile = sh => {
     sh.uniforms.detailMap = { value: V.tex.detail };
@@ -1591,19 +1591,23 @@ function syncDynamic(dt) {
 }
 
 function syncLights(dt) {
-  const p = G.p, n = G.night, storm = G.storm || 0;
-  // sky, fog and ambient follow the time of day and the weather
-  const day = (1 - n) * (1 - storm * 0.45);
+  const p = G.p, n = G.night, storm = G.storm || 0, wfog = World.indoor ? 0 : G.wfog || 0;
+  // sky, fog and ambient follow the time of day and the weather: a clear day is sunny and far-seeing,
+  // fog and rain bring the grey back, the night is pitch black
+  const dl = 1 - n, day = dl * (1 - storm * 0.45) * (1 - wfog * 0.35);
+  const sunny = V.sunny = dl * (1 - storm) * (1 - wfog);
   const fogC = tmpC.setRGB(lerp(0.004, 0.17, day), lerp(0.006, 0.19, day), lerp(0.012, 0.18, day));
+  fogC.lerp(tmpC2.setRGB(0.58, 0.68, 0.78), sunny);
+  if (wfog > 0) fogC.lerp(tmpC2.setRGB(0.36 * dl + 0.01, 0.38 * dl + 0.012, 0.37 * dl + 0.014), wfog * 0.7);
   V.scene.fog.color.copy(fogC); V.scene.background.copy(fogC);
   V.skyMat.uniforms.bot.value.copy(fogC);
-  V.skyMat.uniforms.top.value.setRGB(lerp(0.008, 0.3, day), lerp(0.012, 0.36, day), lerp(0.03, 0.42, day));
+  V.skyMat.uniforms.top.value.setRGB(lerp(0.008, 0.3, day), lerp(0.012, 0.36, day), lerp(0.03, 0.42, day)).lerp(tmpC2.setRGB(0.16, 0.36, 0.72), sunny);
   // thick fog: the forest ends a few steps beyond the flashlight; the swamp is worse
   const reg = World.indoor ? null : regionAt(p.x, p.y);
   V.mf = lerp(V.mf || 1, World.indoor ? MAPS[World.map].fog : (reg && reg.fog) || 1, 0.02);
-  const mf = V.mf;
-  V.scene.fog.near = lerp(6, 110, day) * (1 - storm * 0.3) / mf;
-  V.scene.fog.far = lerp(400, 1350, day) * (G.inside ? 0.85 : 1) * (1 - storm * 0.25) / mf;
+  const mf = lerp(V.mf, 1 + (V.mf - 1) * 0.4, sunny), clearFar = V.quality === "low" ? 1500 : 2300;
+  V.scene.fog.near = lerp(lerp(6, 110, day) * (1 - storm * 0.3), 320, sunny) * (1 - wfog * 0.9) / mf;
+  V.scene.fog.far = lerp(lerp(400, 1350, day) * (1 - storm * 0.25), clearFar, sunny) * (1 - wfog * 0.68) * (G.inside ? 0.85 : 1) / mf;
   if (World.altar && n > 0.5) {
     const ad = Math.hypot(p.x - World.altar.x, p.y - World.altar.y), k = clamp(1 - ad / 700, 0, 1) * 0.8;
     if (k > 0) { fogC.lerp(tmpC2.setRGB(0.06, 0.004, 0.002), k); V.scene.fog.color.copy(fogC); V.scene.background.copy(fogC); V.skyMat.uniforms.bot.value.copy(fogC); }
@@ -1614,12 +1618,20 @@ function syncLights(dt) {
   }
   // lightning: two quick flashes light the whole forest
   const b = G.bolt || 0, flash = b > 0.27 || (b > 0.1 && b < 0.17) ? 1 : 0;
-  V.hemi.intensity = World.indoor ? 0.025 : lerp(0.05, 1.3, day * day) + flash * 2.2;
-  V.moon.intensity = World.indoor ? 0 : lerp(0.11, 1.0, day) + flash * 3;
-  V.moon.color.setRGB(lerp(0.55, 1, day), lerp(0.62, 0.96, day), lerp(0.85, 0.9, day));
+  V.hemi.intensity = World.indoor ? 0.025 : lerp(0.05, 1.3, day * day) + sunny * 0.9 + flash * 2.2;
+  V.renderer.toneMappingExposure = 1.3 + sunny * 0.25;
+  // the painted ground is dark for the night; under the sun it shows its colours
+  if (V.groundMat && !World.indoor) V.groundMat.color.setScalar(1 + sunny * 1.4);
+  V.hemi.color.setRGB(0.6, 0.65, 0.72).lerp(tmpC2.setRGB(0.62, 0.74, 0.95), sunny);
+  // the same directional light is the moon at night and the sun by day
+  V.moon.intensity = World.indoor ? 0 : lerp(0.11, 1.0, day) + sunny * 2.2 + flash * 3;
+  V.moon.color.setRGB(lerp(0.55, 1, day), lerp(0.62, 0.96, day), lerp(0.85, 0.9, day)).lerp(tmpC2.setRGB(1, 0.9, 0.74), sunny);
   if (flash) V.skyMat.uniforms.top.value.setRGB(0.5, 0.55, 0.7);
   V.stars.material.opacity = clamp(n * 1.2 - 0.2, 0, 1) * (1 - storm);
-  V.moonDisc.material.opacity = clamp(n * 1.2 - 0.2, 0, 1) * (1 - storm * 0.85);
+  const sun = clamp(sunny * 1.4 - 0.3, 0, 1), moonA = clamp(n * 1.2 - 0.2, 0, 1) * (1 - storm * 0.85) * (1 - wfog * 0.8);
+  V.moonDisc.material.opacity = Math.max(moonA, sun);
+  V.moonDisc.material.color.setRGB(0.87, 0.9, 1).lerp(tmpC2.setRGB(1, 0.95, 0.82), sunny);
+  V.moonDisc.scale.setScalar(lerp(360, 520, sunny));
 
   // flashlight: weak battery and nearby horrors make it flicker
   const on = p.light && G.lightOff <= 0;
@@ -1674,7 +1686,7 @@ function syncAtmosphere(dt) {
     f.position.set(u.x, u.h + Math.sin(V.time * 0.3 + u.ph) * 4, u.y);
     f.lookAt(cam.position.x, f.position.y, cam.position.z);
     const dd = Math.sqrt(dist2(u.x, u.y, p.x, p.y));
-    f.material.opacity = Math.min(0.85, 0.55 * (0.45 + n * 0.55) * (V.mf || 1)) * clamp((dd - 40) / 120, 0, 1) * (World.indoor ? 0.5 : 1);
+    f.material.opacity = Math.min(0.85, 0.55 * (0.45 + n * 0.55) * (V.mf || 1) * (1 - (V.sunny || 0) * 0.85) + (G.wfog || 0) * 0.3) * clamp((dd - 40) / 120, 0, 1) * (World.indoor ? 0.5 : 1);
   });
   // rain
   const storm = G.storm || 0, R = V.rain;

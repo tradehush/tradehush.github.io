@@ -263,18 +263,21 @@ function onKey(e, down) {
   if (k === "Tab") e.preventDefault();
   if (!down || e.repeat) return;
   if (k === "Escape") {
-    if (G.place) { G.place = null; return; }
-    if (G.showMap) { G.showMap = false; requestLock(); return; }
+    if (G.place) { cancelPlace(); return; }
+    if (G.showMap) { setMap(false); return; }
     if (UI.modal && G.state === "play") { UI.close(); return; }
     UI.pause(); return;
   }
   if (G.state !== "play") return;
   if (k === "Tab" || k === "KeyI") { if (UI.modal === "inv") { UI.close(); requestLock(); } else if (!UI.modal) UI.openInv(); return; }
   if (k === "KeyJ") { if (UI.modal === "journal") { UI.close(); requestLock(); } else if (!UI.modal) UI.openJournal(); return; }
-  if (k === "KeyM") { if (!UI.modal) G.showMap = !G.showMap; return; }
+  if (k === "KeyM") { if (!UI.modal) setMap(!G.showMap); return; }
+  if (G.showMap && (k === "Equal" || k === "NumpadAdd")) { MapView.zoomAt(1.5, innerWidth / 2, innerHeight / 2); return; }
+  if (G.showMap && (k === "Minus" || k === "NumpadSubtract")) { MapView.zoomAt(1 / 1.5, innerWidth / 2, innerHeight / 2); return; }
   if (UI.modal || G.showMap) return;
   if (k === "KeyC") { if (!G.drive) UI.openBuild(); return; }
   if (k === "KeyR" && G.place) { G.place.rot = 1 - G.place.rot; return; }
+  if ((k === "Delete" || k === "Backspace") && G.place) { trashCarried(); return; }
   if (k === "KeyF") toggleLight();
   else if (k === "KeyX") quickEat();
   else if (k === "KeyR") startReload();
@@ -325,7 +328,7 @@ function setupTouch() {
     Sound.init();
     if (!Input.touch) { Input.touch = true; if (G.state === "play") $("#touch").hidden = false; }
     if (G.state !== "play" || UI.modal) return;
-    if (G.showMap) { G.showMap = false; return; }
+    if (G.showMap) { mapTouchT = performance.now(); mapDown(e); try { cv.setPointerCapture(e.pointerId); } catch (err) {} return; }
     $("#qmenu").hidden = true;
     const hb = R.hotbar;
     if (hb && e.clientY >= hb.y && e.clientY <= hb.y + hb.slot && e.clientX >= hb.x && e.clientX <= hb.x + hb.n * (hb.slot + hb.gap)) {
@@ -339,6 +342,7 @@ function setupTouch() {
   });
   cv.addEventListener("pointermove", e => {
     if (e.pointerType === "mouse") return;
+    if (G.showMap) { mapMove(e); return; }
     const inp = G.input;
     if (e.pointerId === Input.mvId) {
       const dx = e.clientX - Input.mvO.x, dy = e.clientY - Input.mvO.y, l = Math.hypot(dx, dy);
@@ -352,6 +356,7 @@ function setupTouch() {
     }
   });
   const end = e => {
+    mapUp(e);
     const inp = G.input;
     if (e.pointerId === Input.mvId) { Input.mvId = null; inp.mvX = inp.mvY = 0; inp.sprint = Input.sprintToggle; sL.hidden = true; }
     if (e.pointerId === Input.lookId) Input.lookId = null;
@@ -378,7 +383,7 @@ function setupTouch() {
   const qmenu = $("#qmenu");
   const q = (id, fn) => btn(id, () => { qmenu.hidden = true; releaseAll(); fn(); });
   btn("#t-menu", () => { qmenu.hidden = !qmenu.hidden; });
-  q("#q-map", () => { G.showMap = !G.showMap; });
+  q("#q-map", () => setMap(!G.showMap));
   q("#q-inv", () => UI.openInv());
   q("#q-build", () => UI.openBuild());
   q("#q-pause", () => UI.pause());
@@ -386,8 +391,43 @@ function setupTouch() {
   q("#q-home", () => UI.askExit());
   btn("#t-ok", () => placeBuild());
   btn("#t-rot", () => { if (G.place) G.place.rot = 1 - G.place.rot; });
-  btn("#t-cancel", () => { G.place = null; });
+  btn("#t-cancel", () => cancelPlace());
+  btn("#t-del", () => trashCarried());
 }
+
+// --- map: drag to move, pinch or wheel to zoom, buttons on the left ------------------------
+
+const MapPtr = new Map();
+let mapPinch = 0, mapMoved = 0, mapTouchT = -1e9;
+function setMap(on) {
+  if (on === !!G.showMap) return;
+  releaseAll(); MapPtr.clear();
+  if (on) { G.showMap = true; MapView.open(); if (document.pointerLockElement) document.exitPointerLock(); }
+  else { G.showMap = false; if (!Input.touch) requestLock(); }
+}
+function mapDown(e) {
+  const id = MapView.hit(e.clientX, e.clientY);
+  if (id) {
+    if (id === "close") setMap(false);
+    else if (id === "me") { MapView.z = Math.max(MapView.z, 3); MapView.cx = G.p.x; MapView.cy = G.p.y; MapView.clampC(); }
+    else MapView.zoomAt(id === "in" ? 1.6 : 1 / 1.6, innerWidth / 2, innerHeight / 2);
+    return;
+  }
+  MapPtr.set(e.pointerId, { x: e.clientX, y: e.clientY }); mapMoved = 0;
+  if (MapPtr.size === 2) { const [a, b] = [...MapPtr.values()]; mapPinch = Math.hypot(a.x - b.x, a.y - b.y); }
+}
+function mapMove(e) {
+  const pt = MapPtr.get(e.pointerId); if (!pt) return;
+  const dx = e.clientX - pt.x, dy = e.clientY - pt.y;
+  pt.x = e.clientX; pt.y = e.clientY; mapMoved += Math.abs(dx) + Math.abs(dy);
+  if (MapPtr.size >= 2) {
+    const [a, b] = [...MapPtr.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (mapPinch > 0 && d > 0) MapView.zoomAt(d / mapPinch, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    mapPinch = d;
+    MapView.pan(dx / 2, dy / 2);
+  } else MapView.pan(dx, dy);
+}
+function mapUp(e) { MapPtr.delete(e.pointerId); if (MapPtr.size < 2) mapPinch = 0; }
 
 // --- boot -------------------------------------------------------------------------------
 
@@ -404,12 +444,13 @@ function boot() {
   cv.addEventListener("mousedown", e => {
     Sound.init();
     if (G.state !== "play" || UI.modal) return;
-    if (G.showMap) { G.showMap = false; return; }
+    if (G.showMap) { if (performance.now() - mapTouchT > 900) mapDown(e); return; }
     if (!Input.locked && !Input.noLock) { requestLock(); return; }
     if (e.button === 0) G.input.attack = true;
     if (e.button === 2) G.input.interact = true;
   });
-  addEventListener("mouseup", e => { if (e.button === 0) G.input.attack = false; if (e.button === 2) G.input.interact = false; });
+  cv.addEventListener("mousemove", e => { if (G.showMap && performance.now() - mapTouchT > 900) mapMove(e); });
+  addEventListener("mouseup", e => { mapUp(e); if (e.button === 0) G.input.attack = false; if (e.button === 2) G.input.interact = false; });
   document.addEventListener("mousemove", e => { if ((Input.locked || Input.noLock) && G.state === "play" && !UI.modal && !Input.touch) look(e.movementX, e.movementY, Input.sens); });
   // some frames refuse pointer lock: then the mouse turns the view without capturing the cursor
   document.addEventListener("pointerlockerror", () => { Input.noLock = true; });
@@ -417,7 +458,11 @@ function boot() {
     Input.locked = document.pointerLockElement === cv;
     if (!Input.locked && !Input.noLock) { G.input.attack = false; if (G.state === "play" && !UI.modal && !G.showMap) UI.pause(); }
   });
-  cv.addEventListener("wheel", e => { if (G.state === "play" && !UI.modal) cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
+  cv.addEventListener("wheel", e => {
+    if (G.state !== "play" || UI.modal) return;
+    if (G.showMap) MapView.zoomAt(e.deltaY > 0 ? 1 / 1.25 : 1.25, e.clientX, e.clientY);
+    else cycleWeapon(e.deltaY > 0 ? 1 : -1);
+  }, { passive: true });
   cv.addEventListener("contextmenu", e => e.preventDefault());
   setupTouch();
 
@@ -473,6 +518,8 @@ function boot() {
     if (Input.touch) {
       tAct.classList.toggle("ready", running && (!!G.target || G.drive || (G.fishing && G.fishing.bite > 0)));
       touchRoot.classList.toggle("placing", !!G.place);
+      touchRoot.classList.toggle("moving", !!(G.place && G.place.move));
+      touchRoot.classList.toggle("mapopen", !!G.showMap);
       touchRoot.classList.toggle("driving", !!G.drive);
       const hint = G.tip && TIP_BTN[G.tip.icon];
       for (const b of hintBtns) b.classList.toggle("hint", !!hint && b.id === hint);

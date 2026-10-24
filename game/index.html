@@ -23,6 +23,7 @@
       <button class="btn" id="continue" hidden>Продолжить</button>
       <button class="btn" id="new">Новая игра</button>
       <button class="btn ghost" id="help-btn">Управление</button>
+      <button class="btn ghost" id="title-guide">Как крафтить</button>
     </div>
     <p class="hint">Играть лучше в наушниках и в темноте.<br><span class="touch-only">Поверни телефон горизонтально.</span></p>
   </div>
@@ -55,7 +56,18 @@
         <p>Тень замирает, когда на неё светят фонарём. Не отворачивайся.</p>
       </div>
     </div>
-    <button class="btn" id="help-close">Понятно</button>
+    <h3>Кнопки на телефоне</h3>
+    <ul class="tkeys">
+      <li><span class="ic huge">⚔</span> Атака. Держи — бьёт без остановки. Можно вести пальцем, чтобы поворачиваться.</li>
+      <li><span class="ic">✋</span> Действие: читать, брать, открыть верстак. Держи — рубить, копать, собирать.</li>
+      <li><span class="ic">⇄</span> Сменить оружие. Можно нажать прямо на слот внизу экрана.</li>
+      <li><span class="ic">⟳</span> Перезарядить.</li>
+      <li><span class="ic">🔦</span> Фонарь вкл/выкл.</li>
+      <li><span class="ic">🩹</span> Лечение: аптечка, если есть, иначе бинт.</li>
+      <li><span class="ic">🏃</span> Бег (переключатель). Или отведи стик до края.</li>
+      <li><span class="ic">🗺</span> Карта. <span class="ic">🎒</span> Сумка и крафт. <span class="ic">❚❚</span> Пауза. <span class="ic">⌂</span> Главное меню. <span class="ic">?</span> Эта справка.</li>
+    </ul>
+    <div class="row"><button class="btn" id="help-close">Понятно</button><button class="btn ghost" id="help-guide">Как крафтить</button></div>
   </div>
 </div>
 
@@ -69,7 +81,7 @@
 
 <div id="inv" class="panel" hidden>
   <div class="box wide">
-    <div class="head"><h2>Сумка</h2><button class="btn ghost small" id="inv-close">✕</button></div>
+    <div class="head"><h2>Сумка</h2><div class="acts"><button class="btn ghost small" id="guide-btn">📖 Как крафтить</button><button class="btn ghost small" id="inv-close">✕</button></div></div>
     <div class="cols inv">
       <div>
         <h3>Ресурсы</h3>
@@ -86,6 +98,35 @@
   </div>
 </div>
 
+<div id="guide" class="panel" hidden>
+  <div class="box wide">
+    <h2>Как крафтить</h2>
+    <ol class="steps">
+      <li><b>Добывай ресурсы.</b> Подойди и держи ✋ / E. Дерево — с деревьев, камень — с валунов, металлолом — из ржавых куч, травы — с кустов с белыми ягодами. Топор ускоряет добычу дерева в 3 раза.</li>
+      <li><b>Обыскивай ящики</b> в домах: там ткань, порох, спирт, батарейки, патроны, бинты. Часть ящиков за ночь наполняется снова.</li>
+      <li><b>Убивай тварей</b> — с них падают клыки, иногда патроны. Клыки нужны для мачете и капканов.</li>
+      <li><b>Открой сумку</b> (🎒 / Tab) и нажми «Создать». Простые вещи — бинт, аптечку, отвар, костёр, «Молотов» — можно делать где угодно.</li>
+      <li><b>Оружие, патроны, батарейки и капканы</b> — только у верстака. Верстаки стоят в доме лесника и в хижине охотника.</li>
+      <li><b>С чего начать:</b> топор (4 дерева + 3 камня), потом бинты и костёр на ночь. Пистолет и дробовик не крафтятся — их можно найти в доме старосты и в хижине охотника.</li>
+    </ol>
+    <h3>Все рецепты</h3>
+    <ul id="guide-list" class="guide"></ul>
+    <button class="btn" id="guide-close">Закрыть</button>
+  </div>
+</div>
+
+<div id="exit" class="panel" hidden>
+  <div class="box">
+    <h2>Выйти в главное меню?</h2>
+    <p class="muted">Можно сохранить игру прямо сейчас и продолжить позже с этого места.</p>
+    <div class="menu wide-menu">
+      <button class="btn" id="exit-save">Сохранить и выйти</button>
+      <button class="btn ghost" id="exit-nosave">Выйти без сохранения</button>
+      <button class="btn ghost" id="exit-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <div id="journal" class="panel" hidden>
   <div class="box">
     <h2>Журнал</h2>
@@ -97,12 +138,15 @@
 <div id="pause" class="screen" hidden>
   <div class="title-box">
     <h2>Пауза</h2>
-    <div class="menu">
+    <div class="menu pause-menu">
       <button class="btn" id="resume">Продолжить</button>
       <button class="btn ghost" id="p-journal">Журнал</button>
       <button class="btn ghost" id="p-help">Управление</button>
+      <button class="btn ghost" id="p-guide">Как крафтить</button>
       <button class="btn ghost" id="snd-btn">Звук: вкл</button>
-      <button class="btn ghost" id="shd-btn">Тени: вкл</button>
+      <button class="btn ghost" id="q-btn">Графика: Средняя</button>
+      <button class="btn ghost" id="scare-btn">Скримеры: вкл</button>
+      <label class="sens" for="sens">Чувствительность обзора <b id="sens-v">1.0×</b><input type="range" id="sens" min="0.4" max="2.5" step="0.1" value="1"></label>
       <button class="btn ghost" id="to-title">В главное меню</button>
     </div>
     <p class="hint">Игра сохраняется, когда спишь в кровати, и на ключевых моментах сюжета.</p>
@@ -131,18 +175,20 @@
 <div id="touch" hidden>
   <div id="stickL" class="stick" hidden><i></i></div>
   <div class="tbar top">
-    <button id="t-map" class="tb">🗺</button>
-    <button id="t-inv" class="tb">🎒</button>
-    <button id="t-pause" class="tb">❚❚</button>
+    <button id="t-help" class="tb sm" aria-label="Справка">?<i>справка</i></button>
+    <button id="t-map" class="tb sm" aria-label="Карта">🗺<i>карта</i></button>
+    <button id="t-inv" class="tb sm" aria-label="Сумка">🎒<i>сумка</i></button>
+    <button id="t-pause" class="tb sm" aria-label="Пауза">❚❚<i>пауза</i></button>
+    <button id="t-home" class="tb sm" aria-label="Главное меню">⌂<i>меню</i></button>
   </div>
   <div class="tbar side">
-    <button id="t-atk" class="tb huge">⚔</button>
-    <button id="t-act" class="tb big">✋</button>
-    <button id="t-swap" class="tb">⇄</button>
-    <button id="t-reload" class="tb">⟳</button>
-    <button id="t-light" class="tb">🔦</button>
-    <button id="t-heal" class="tb">🩹</button>
-    <button id="t-run" class="tb">🏃</button>
+    <button id="t-atk" class="tb huge" aria-label="Атака">⚔<i>атака</i></button>
+    <button id="t-act" class="tb big" aria-label="Действие">✋<i>действие</i></button>
+    <button id="t-swap" class="tb" aria-label="Оружие">⇄<i>оружие</i></button>
+    <button id="t-reload" class="tb" aria-label="Перезарядка">⟳<i>патроны</i></button>
+    <button id="t-light" class="tb" aria-label="Фонарь">🔦<i>фонарь</i></button>
+    <button id="t-heal" class="tb" aria-label="Лечение">🩹<i>лечить</i></button>
+    <button id="t-run" class="tb" aria-label="Бег">🏃<i>бег</i></button>
   </div>
 </div>
 

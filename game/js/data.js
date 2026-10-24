@@ -39,11 +39,11 @@ const WEAPONS = [
 const W_IDX = Object.fromEntries(WEAPONS.map((w, i) => [w.id, i]));
 
 const MONSTERS = {
-  crawler: { n: "Ползун",   hp: 34,  speed: 128, dmg: 9,  r: 12, reach: 18, acd: 0.8, col: "#5a4a42", eye: "#ff2a1a", drop: { fang: 0.35 } },
-  ghoul:   { n: "Упырь",    hp: 70,  speed: 88,  dmg: 15, r: 15, reach: 20, acd: 1.0, col: "#4b5248", eye: "#ffb01a", drop: { fang: 0.6, cloth: 0.3 } },
-  brute:   { n: "Корявый",  hp: 260, speed: 58,  dmg: 32, r: 26, reach: 26, acd: 1.6, col: "#3b3227", eye: "#ff4010", drop: { fang: 1, scrap: 0.6 } },
-  spitter: { n: "Плевун",   hp: 48,  speed: 74,  dmg: 12, r: 13, reach: 16, acd: 2.2, col: "#4c5a33", eye: "#b6ff2a", drop: { fang: 0.4, herb: 0.5 }, ranged: true },
-  stalker: { n: "Тень",     hp: 90,  speed: 175, dmg: 22, r: 14, reach: 20, acd: 0.9, col: "#0c0c10", eye: "#e8f0ff", drop: { fang: 0.8, powder: 0.5 } },
+  crawler: { n: "Ползун",   hp: 34,  speed: 128, dmg: 9,  r: 12, reach: 18, acd: 0.8, col: "#7d7266", eye: "#ff2a1a", drop: { fang: 0.35 } },
+  ghoul:   { n: "Упырь",    hp: 70,  speed: 88,  dmg: 15, r: 15, reach: 20, acd: 1.0, col: "#8b8475", eye: "#ffb01a", drop: { fang: 0.6, cloth: 0.3 } },
+  brute:   { n: "Корявый",  hp: 260, speed: 58,  dmg: 32, r: 26, reach: 26, acd: 1.6, col: "#4a3b2c", eye: "#ff4010", drop: { fang: 1, scrap: 0.6 } },
+  spitter: { n: "Плевун",   hp: 48,  speed: 74,  dmg: 12, r: 13, reach: 16, acd: 2.2, col: "#6b7340", eye: "#b6ff2a", drop: { fang: 0.4, herb: 0.5 }, ranged: true },
+  stalker: { n: "Тень",     hp: 90,  speed: 175, dmg: 22, r: 14, reach: 20, acd: 0.9, col: "#0b0b0e", eye: "#e8f0ff", drop: { fang: 0.8, powder: 0.5 } },
   boss:    { n: "Хозяин леса", hp: 2200, speed: 72, dmg: 34, r: 40, reach: 34, acd: 1.3, col: "#2a2018", eye: "#ff1a00", drop: {} },
 };
 

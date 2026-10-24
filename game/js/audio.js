@@ -58,7 +58,7 @@ const Sound = (() => {
     ws.connect(wf); wf.connect(windGain); ws.start();
   }
 
-  let beatT = 0;
+  let beatT = 0, rainGain = null;
   return {
     init,
     get muted() { return muted; },
@@ -113,6 +113,31 @@ const Sound = (() => {
     glass() { noise(0.2, { type: "highpass", freq: 4000, vol: 0.3 }); tone(2400, 0.15, { vol: 0.08, freqEnd: 1800 }); },
     step() { noise(0.05, { type: "lowpass", freq: 400, vol: 0.06 }); },
     sting() { tone(110, 2.5, { type: "sawtooth", vol: 0.15, freqEnd: 104, attack: 0.02 }); tone(116.5, 2.5, { type: "sawtooth", vol: 0.15, attack: 0.02 }); noise(1.5, { type: "highpass", freq: 3000, vol: 0.1 }); },
+    screech(pitch = 1, vol = 0.3) {
+      tone(520 * pitch, 0.9, { type: "sawtooth", vol: vol * 0.5, freqEnd: 300 * pitch, attack: 0.03 });
+      tone(555 * pitch, 0.9, { type: "square", vol: vol * 0.25, freqEnd: 330 * pitch, attack: 0.03 });
+      noise(0.8, { type: "bandpass", freq: 1800 * pitch, q: 3, vol: vol * 0.7, attack: 0.03 });
+    },
+    screamer() {
+      noise(1.1, { type: "highpass", freq: 900, vol: 1, attack: 0.002 });
+      tone(880, 1, { type: "sawtooth", vol: 0.45, freqEnd: 1700, attack: 0.002 });
+      tone(933, 1, { type: "square", vol: 0.3, freqEnd: 1500, attack: 0.002 });
+      tone(60, 0.8, { type: "sine", vol: 0.8, freqEnd: 30, attack: 0.002 });
+    },
+    thunder(delay = 0.5) {
+      noise(2.8, { type: "lowpass", freq: 900, freqEnd: 60, vol: 0.9, attack: 0.05, when: delay });
+      noise(1.2, { type: "lowpass", freq: 2400, freqEnd: 200, vol: 0.4, attack: 0.01, when: delay });
+    },
+    rain(level) {
+      if (!ctx) return;
+      if (!rainGain) {
+        rainGain = ctx.createGain(); rainGain.gain.value = 0; rainGain.connect(master);
+        const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+        const f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 1200;
+        src.connect(f); f.connect(rainGain); src.start();
+      }
+      rainGain.gain.setTargetAtTime(level * 0.22, ctx.currentTime, 0.8);
+    },
     bossRoar() { tone(45, 2, { type: "sawtooth", vol: 0.5, freqEnd: 30, attack: 0.2 }); noise(2, { type: "lowpass", freq: 500, vol: 0.6, attack: 0.3 }); },
   };
 })();

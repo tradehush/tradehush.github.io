@@ -24,7 +24,14 @@ function renderHud(dt) {
   if (G.state === "title" || G.state === "intro") return;
   drawScreenFx(ctx);
   drawHUD(ctx);
+  drawTip(ctx);
   if (G.showMap) drawMap(ctx);
+  if (G.scare) drawScare(ctx);
+  if (Input.touch && innerHeight > innerWidth && G.state === "play" && !G.showMap) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0, R.H * 0.42, R.W, 44 * R.dpr);
+    ctx.font = `bold ${14 * R.dpr}px ui-monospace, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#efe6c8";
+    ctx.fillText("⟲ Поверни телефон горизонтально", R.W / 2, R.H * 0.42 + 22 * R.dpr); ctx.textAlign = "left";
+  }
   if (!Input.touch && !Input.locked && G.state === "play" && !UI.modal && !G.showMap) {
     ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, R.H / 2 + 30 * R.dpr, R.W, 40 * R.dpr);
     ctx.font = `bold ${16 * R.dpr}px ui-monospace, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#efe6c8";
@@ -84,7 +91,7 @@ function drawHUD(ctx) {
   if (step && G.step < 7) {
     let t = step.t;
     if (G.step === 4) t += `  (${G.seals.length}/3)`;
-    const tw = Math.min(ctx.measureText("ЦЕЛЬ: " + t).width + 20 * u, W - pad * 2 - (narrow ? 0 : 200 * u));
+    const tw = Math.min(ctx.measureText("ЦЕЛЬ: " + t).width + 20 * u, W - pad * 2 - (touch ? (W / u > 600 ? 270 * u : 0) : narrow ? 0 : 200 * u));
     ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(pad, pad, tw, 26 * u);
     ctx.fillStyle = "#d8c890";
     ctx.save(); ctx.beginPath(); ctx.rect(pad, pad, tw, 26 * u); ctx.clip();
@@ -115,7 +122,9 @@ function drawHUD(ctx) {
 
   // weapon hotbar
   const slot = (touch ? 44 : 54) * u, gap = 6 * u, n = G.owned.length;
-  const hx = W / 2 - (n * slot + (n - 1) * gap) / 2, hy = H - pad - slot;
+  const hcx = touch && W / u > 600 ? (W - 230 * u) / 2 : W / 2;
+  const hx = hcx - (n * slot + (n - 1) * gap) / 2, hy = H - pad - slot;
+  R.hotbar = { x: hx / u, y: hy / u, slot: slot / u, gap: gap / u, n };
   font(10, "bold");
   G.owned.forEach((id, i) => {
     const w = WEAPONS[W_IDX[id]], x = hx + i * (slot + gap);
@@ -206,4 +215,66 @@ function drawMap(ctx) {
   ctx.restore();
   ctx.fillStyle = "#d8c890"; ctx.fillText("КАРТА — нажми M / ✕, чтобы закрыть", W / 2, oy - 16 * u);
   ctx.textAlign = "left";
+}
+
+// hint box above the bars
+function drawTip(ctx) {
+  if (!G.tip || G.showMap) return;
+  const u = R.dpr, W = R.W, H = R.H;
+  const a = clamp(Math.min(G.tip.t, 8 - G.tip.t) / 0.4, 0, 1);
+  ctx.globalAlpha = a;
+  ctx.font = `${13 * u}px ui-monospace, Menlo, Consolas, monospace`;
+  const maxW = Math.min(W * (Input.touch ? 0.4 : 0.36), 420 * u);
+  const words = ("💡 " + G.tip.text).split(" "), lines = [];
+  let line = "";
+  for (const w of words) { const t = line ? line + " " + w : w; if (ctx.measureText(t).width > maxW - 24 * u && line) { lines.push(line); line = w; } else line = t; }
+  lines.push(line);
+  const lh = 18 * u, bw = maxW, bh = lines.length * lh + 16 * u;
+  // bottom-left, clear of the crosshair, above the weapon slots
+  const x = 14 * u, y = Input.touch ? H - bh - 72 * u : H - 14 * u - 88 * u - bh - 14 * u;
+  ctx.fillStyle = "rgba(20,18,10,0.82)"; ctx.fillRect(x, y, bw, bh);
+  ctx.strokeStyle = "rgba(216,200,144,0.6)"; ctx.lineWidth = u; ctx.strokeRect(x, y, bw, bh);
+  ctx.fillStyle = "#efe6c8"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => ctx.fillText(l, x + 12 * u, y + 8 * u + lh * (i + 0.5)));
+  ctx.globalAlpha = 1;
+}
+
+// the jump-scare face, drawn procedurally and shaking
+function drawScare(ctx) {
+  const sc = G.scare, W = R.W, H = R.H;
+  const k = sc.t / sc.max, rnd = mulberry32(Math.floor(R.time * 30) + (sc.seed * 1000 | 0));
+  ctx.save();
+  ctx.globalAlpha = clamp(k * 3, 0, 1);
+  ctx.fillStyle = rnd() < 0.5 ? "rgba(60,0,0,0.85)" : "rgba(0,0,0,0.9)";
+  ctx.fillRect(0, 0, W, H);
+  const S = Math.min(W, H) * (0.9 + (1 - k) * 0.5) * (0.95 + rnd() * 0.1);
+  ctx.translate(W / 2 + (rnd() - 0.5) * 40, H / 2 + (rnd() - 0.5) * 40);
+  ctx.rotate((rnd() - 0.5) * 0.15);
+  // skull-pale face
+  const g = ctx.createRadialGradient(0, -S * 0.05, S * 0.05, 0, 0, S * 0.5);
+  g.addColorStop(0, sc.kind === "stalker" ? "#e8e4dc" : "#b8ad98"); g.addColorStop(0.7, sc.kind === "stalker" ? "#9a958c" : "#6a5e4c"); g.addColorStop(1, "rgba(20,10,5,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, S * 0.36, S * 0.5, 0, 0, 7); ctx.fill();
+  // veins and cracks
+  ctx.strokeStyle = "rgba(60,10,10,0.6)"; ctx.lineWidth = Math.max(1, S * 0.004);
+  for (let i = 0; i < 14; i++) { ctx.beginPath(); let x = (rnd() - 0.5) * S * 0.5, y = (rnd() - 0.5) * S * 0.7; ctx.moveTo(x, y); for (let j = 0; j < 4; j++) { x += (rnd() - 0.5) * S * 0.08; y += (rnd() - 0.5) * S * 0.08; ctx.lineTo(x, y); } ctx.stroke(); }
+  // hollow eyes
+  for (const sd of [-1, 1]) {
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(sd * S * 0.13, -S * 0.12, S * 0.085, S * 0.11, sd * 0.2, 0, 7); ctx.fill();
+    ctx.fillStyle = sc.kind === "stalker" ? "#ffffff" : "#ff2010"; ctx.beginPath(); ctx.arc(sd * S * 0.13 + (rnd() - 0.5) * 4, -S * 0.11, S * 0.012, 0, 7); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = S * 0.01; ctx.beginPath(); ctx.moveTo(sd * S * 0.13, -S * 0.02); ctx.lineTo(sd * S * 0.11, S * 0.12); ctx.stroke();
+  }
+  // gaping mouth with teeth
+  const mh = S * (0.22 + 0.06 * Math.sin(R.time * 40));
+  ctx.fillStyle = "#0a0000"; ctx.beginPath(); ctx.ellipse(0, S * 0.22, S * 0.13, mh * 0.6, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#d8ceb0";
+  for (let i = -4; i <= 4; i++) {
+    const x = i * S * 0.026;
+    ctx.beginPath(); ctx.moveTo(x - S * 0.012, S * 0.22 - mh * 0.52); ctx.lineTo(x + S * 0.012, S * 0.22 - mh * 0.52); ctx.lineTo(x, S * 0.22 - mh * 0.3 + rnd() * S * 0.02); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - S * 0.012, S * 0.22 + mh * 0.52); ctx.lineTo(x + S * 0.012, S * 0.22 + mh * 0.52); ctx.lineTo(x, S * 0.22 + mh * 0.3 - rnd() * S * 0.02); ctx.fill();
+  }
+  ctx.restore();
+  // scanline glitch
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  for (let i = 0; i < 12; i++) ctx.fillRect(0, rnd() * H, W, 2 + rnd() * 6);
+  ctx.globalAlpha = 1;
 }

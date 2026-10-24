@@ -9,13 +9,32 @@ const G = {
   p: null, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
   inv: {}, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {},
   msgs: [], shake: 0, flash: 0, hurtFlash: 0, lightOff: 0, noise: null, spawnT: 5, flowT: 0, hallT: 15, whisperT: 20,
-  rays: [], night: 0, boss: null, endT: 0, bossDead: false, inside: null, swingT: 0,
+  rays: [], night: 0, storm: 0, stormOn: false, stormT: 240, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 20, spotCd: 0, tips: [], tip: null,
+  boss: null, endT: 0, bossDead: false, inside: null, swingT: 0,
   input: { up: 0, down: 0, left: 0, right: 0, sprint: false, attack: false, interact: false, mvX: 0, mvY: 0 },
 };
 
 function newPlayer() {
   return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, pitch: 0, hp: 100, sta: 100, san: 100, bat: 100, light: true,
     atkCd: 0, reloadT: 0, iframe: 0, staLock: 0, stepT: 0, act: null, actProg: 0, actTick: 0, moving: false };
+}
+
+// one-time hints; shown in their own box so they do not get lost among pickups
+function tip(key, text) {
+  if (G.tips.includes(key)) return;
+  G.tips.push(key);
+  G.tip = { text, t: 8 };
+}
+const K = (touch, key) => Input.touch ? touch : key;
+
+// jump scare: a face fills the screen with a scream
+function screamer(kind) {
+  if (!Settings.scares || G.scareCd > 0 || G.state !== "play") return;
+  G.scare = { t: 0.8, max: 0.8, kind, seed: Math.random() };
+  G.scareCd = 35;
+  G.shake = Math.max(G.shake, 22);
+  G.p.san = Math.max(0, G.p.san - 5);
+  Sound.screamer();
 }
 
 function toast(text, dur = 3.5) {
@@ -46,7 +65,8 @@ function newGame() {
   generateWorld(G.seed);
   Object.assign(G, { t: 15 / 24, day: 1, step: 0, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
     inv: { bandage: 1 }, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {}, msgs: [],
-    boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0 });
+    boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0,
+    storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
 }
 
@@ -57,7 +77,7 @@ function save() {
     World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
     const it = World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0));
     const data = { v: 1, seed: G.seed, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, discovered: G.discovered, fires: G.fires, traps: G.traps,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, fires: G.fires, traps: G.traps,
       p: { x: p.x, y: p.y, hp: p.hp, san: p.san, bat: p.bat, light: p.light }, res, it };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
@@ -73,7 +93,7 @@ function load() {
   newGame();
   generateWorld(d.seed); G.seed = d.seed;
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, fires: d.fires || [], traps: d.traps || [] });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], fires: d.fires || [], traps: d.traps || [] });
   for (const [i, left, regrow] of d.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; }
   (d.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
   Object.assign(G.p, d.p);
@@ -334,6 +354,10 @@ function hurt(dmg, src) {
   p.hp -= dmg; p.iframe = 0.45; p.san = Math.max(0, p.san - dmg * 0.25);
   G.shake = Math.max(G.shake, 8); G.hurtFlash = 0.5;
   Sound.hurt(); blood(p.x, p.y, 6);
+  if (src && src.type) {
+    const behind = Math.abs(angDiff(p.a, Math.atan2(src.y - p.y, src.x - p.x))) > 1.9;
+    if (src.type === "stalker" || (behind && Math.random() < 0.6)) screamer(src.type);
+  }
   if (src) { const dx = p.x - src.x, dy = p.y - src.y, l = Math.hypot(dx, dy) || 1; p.x += dx / l * 10; p.y += dy / l * 10; collide(p); }
   if (p.hp <= 0) { p.hp = 0; die(); }
 }
@@ -370,6 +394,10 @@ function updateMonsters(dt) {
     if ((d < senseBase && (m.los || d < 160)) || heard || (m.beam && d < FLASH_RANGE) || m.guard || m.type === "boss") { m.aggro = Math.max(m.aggro, heard ? 8 : 5); }
     m.aggro -= dt;
     m.state = m.aggro > 0 ? "chase" : "wander";
+    if (m.state === "chase" && !m.spotted) {
+      m.spotted = true;
+      if (!m.fake && d < 650 && G.spotCd <= 0) { G.spotCd = 2.5; m.type === "stalker" ? Sound.whisper() : Sound.screech(m.type === "crawler" ? 1.5 : m.type === "brute" ? 0.6 : m.type === "boss" ? 0.45 : m.type === "spitter" ? 1.2 : 1, clamp(0.5 - d / 1600, 0.12, 0.5)); }
+    }
 
     // growls
     m.growlT -= dt;
@@ -655,7 +683,7 @@ function doInteract(o) {
     case "seal":
       G.seals.push(o.seal); Sound.sting(); G.shake = 10;
       toast(`${o.label} (${G.seals.length}/3)`, 3);
-      setTimeout(() => toast("Что-то пробудилось…", 3), 900);
+      setTimeout(() => { toast("Что-то пробудилось…", 3); screamer("seal"); }, 1100);
       for (const [type, n] of o.guard) for (let i = 0; i < n; i++) {
         const s = freeSpot(p.x, p.y, 160, 340, true, false);
         if (s) { const m = spawnMonster(type, s.x, s.y, { guard: true }); m.aggro = 99; }
@@ -796,6 +824,29 @@ function update(dt) {
   if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
   G.night = nightFactor(G.t);
 
+  // weather: storms come and go; lightning is mostly for show but also lights the forest
+  G.stormT -= dt;
+  if (G.stormT <= 0) {
+    G.stormOn = !G.stormOn;
+    G.stormT = G.stormOn ? 90 + Math.random() * 120 : 160 + Math.random() * 260;
+    if (G.stormOn) toast("Начинается гроза", 3);
+  }
+  G.storm = clamp(G.storm + (G.stormOn ? 1 : -1) * dt * 0.08, 0, 1);
+  Sound.rain(G.inside ? G.storm * 0.4 : G.storm);
+  G.bolt = Math.max(0, G.bolt - dt);
+  if (G.storm > 0.5) {
+    G.boltT -= dt;
+    if (G.boltT <= 0) { G.boltT = 5 + Math.random() * 14; G.bolt = 0.35; Sound.thunder(0.3 + Math.random() * 1.5); }
+  }
+  // the flashlight goes mad near the Shadow and the Master
+  let near = 0;
+  for (const m of G.mons) if (!m.fake && (m.type === "stalker" || m.type === "boss")) near = Math.max(near, 1 - Math.hypot(m.x - p.x, m.y - p.y) / 480);
+  G.interf = clamp(near, 0, 1);
+  G.scareCd = Math.max(0, G.scareCd - dt);
+  G.spotCd = Math.max(0, G.spotCd - dt);
+  if (G.scare) { G.scare.t -= dt; if (G.scare.t <= 0) G.scare = null; }
+  if (G.tip) { G.tip.t -= dt; if (G.tip.t <= 0) G.tip = null; }
+
   // story: entering the forester's house
   G.inside = insideHouse(p.x, p.y);
   if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
@@ -850,6 +901,19 @@ function update(dt) {
   // interaction (E): press for instant actions, hold for gathering
   const target = findInteract();
   G.target = target;
+  if (target) {
+    if (GATHER[target.type]) tip("gather", `Держи ${K("✋", "E")}, чтобы добывать ресурсы. Топор рубит в 3 раза быстрее.`);
+    else if (target.type === "bench") tip("bench", `Верстак! Нажми ${K("✋", "E")} — откроется крафт. Сначала сделай топор: 4 дерева + 3 камня.`);
+    else if (target.type === "crate") tip("crate", "В ящиках ткань, порох, спирт, батарейки и патроны. За ночь часть ящиков наполняется снова.");
+    else if (target.type === "note") tip("note", `Записки двигают сюжет. Перечитать — в журнале (${K("⏸ → Журнал", "J")}).`);
+  }
+  if (G.night > 0.5) tip("night", "Наступила ночь. Твари сильнее и их больше — держись у света и костров.");
+  if (p.bat < 25) tip("battery", `Фонарь садится. Батарейки — в ящиках или на верстаке (2 металлолома + 1 порох).`);
+  if (p.san < 55) tip("sanity", "Рассудок падает в темноте и при виде тварей. Помогают костёр, свет и травяной отвар.");
+  if (p.hp < 55) tip("heal", `Ты ранен. Лечение — ${K("🩹", "H")} (бинт или аптечка). Бинт: 2 ткани.`);
+  if ((G.inv.fang || 0) > 0) tip("fang", "Клыки тварей нужны для мачете и капканов.");
+  if (G.mons.some(m => m.beam && !m.fake && m.type === "stalker")) tip("stalker", "Это Тень. Пока свет фонаря на ней — она не двигается. Не отворачивайся!");
+  else if (G.mons.some(m => m.beam && !m.fake)) tip("monster", `Тварь! Бей — ${K("⚔", "ЛКМ")}. Выстрелы громкие и приманивают других.`);
   if (inp.interact && target) {
     if (isHoldAction(target)) {
       if (p.act !== target) { p.act = target; p.actProg = 0; p.actTick = 0; }
@@ -885,6 +949,7 @@ function update(dt) {
       const s = freeSpot(p.x, p.y, 260, 420, false, false);
       if (s) { const m = spawnMonster(Math.random() < 0.5 ? "ghoul" : "stalker", s.x, s.y, { fake: true, fakeT: 8, aggro: 99 }); m.hp = 1; }
     }
+    if (p.san < 25 && Math.random() < dt / 70) screamer("hall");
     G.whisperT -= dt;
     if (G.whisperT <= 0) { G.whisperT = 4 + Math.random() * 8; Sound.whisper(); }
   }

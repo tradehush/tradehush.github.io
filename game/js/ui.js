@@ -8,6 +8,10 @@ const Input = {
   sprintToggle: false, mvId: null, lookId: null, mvO: null, lookP: null,
 };
 
+const Settings = { scares: true, sens: 1 };
+try { Object.assign(Settings, JSON.parse(localStorage.getItem("bp.settings") || "{}")); } catch (e) {}
+function saveSettings() { try { localStorage.setItem("bp.settings", JSON.stringify(Settings)); } catch (e) {} }
+
 const UI = {
   modal: null,
   open(id) {
@@ -92,10 +96,29 @@ const UI = {
     f.classList.add("on");
     setTimeout(() => { fn(); setTimeout(() => f.classList.remove("on"), 300); }, 900);
   },
+  syncSettings() {
+    $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
+    $("#q-btn").textContent = "Графика: " + QUALITY[V.quality].n;
+    $("#scare-btn").textContent = "Скримеры: " + (Settings.scares ? "вкл" : "выкл");
+    $("#sens").value = Settings.sens;
+    $("#sens-v").textContent = Settings.sens.toFixed(1) + "×";
+  },
+  openGuide() {
+    const box = $("#guide-list");
+    box.innerHTML = "";
+    for (const r of RECIPES) {
+      const li = document.createElement("li");
+      const need = Object.entries(r.need).map(([k, q]) => `${ITEMS[k].icon} ${ITEMS[k].n} ×${q}`).join(", ");
+      li.innerHTML = `<b>${r.n}</b> <small class="tag">${r.where === "bench" ? "верстак" : "где угодно"}</small><div class="need">${need}</div>${r.d ? `<small class="muted">${r.d}</small>` : ""}`;
+      box.appendChild(li);
+    }
+    this.open("guide");
+  },
+  askExit() { this.open("exit"); },
   pause() {
     if (G.state !== "play") return;
     $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
-    $("#shd-btn").textContent = "Тени: " + (V.shadows ? "вкл" : "выкл");
+    this.syncSettings();
     this.open("pause");
   },
 };
@@ -123,6 +146,11 @@ const END_BAD = `Хозяин рухнул… но шёпот не стих. О�
 
 ПЛОХАЯ КОНЦОВКА
 (Рассудок был ниже 30. Береги его: костры, отвар из трав, свет.)`;
+
+function exitToTitle(keep) {
+  if (keep && G.state === "play") save();
+  toTitle();
+}
 
 // --- flow between screens ---------------------------------------------------------------
 
@@ -165,7 +193,7 @@ function startPlay() {
   enterPlay();
   G.p.a = -Math.PI / 2 + 0.25;
   toast("Дорога ведёт на север, к дому лесника.", 4);
-  toast(Input.touch ? "Левый палец — идти, правый — смотреть. Кнопки справа." : "WASD — идти, мышь — смотреть, ЛКМ — бить, E — действие", 5);
+  tip("start", Input.touch ? "Левый палец — ходить, правый — осматриваться. ⚔ — удар, ✋ — действие. Что делает каждая кнопка — «?» вверху справа." : "WASD — ходить, мышь — смотреть, ЛКМ — удар, E — действие, Tab — сумка. Esc — пауза и выход в меню.");
 }
 
 function continueGame() {
@@ -232,6 +260,7 @@ function toggleLight() {
 
 function look(dx, dy, k) {
   const p = G.p;
+  k *= Settings.sens;
   p.a += dx * k;
   p.pitch = clamp((p.pitch || 0) - dy * k, -1.1, 0.9);
 }
@@ -264,6 +293,11 @@ function setupTouch() {
     if (!Input.touch) { Input.touch = true; if (G.state === "play") $("#touch").hidden = false; }
     if (G.state !== "play" || UI.modal) return;
     if (G.showMap) { G.showMap = false; return; }
+    const hb = R.hotbar;
+    if (hb && e.clientY >= hb.y && e.clientY <= hb.y + hb.slot && e.clientX >= hb.x && e.clientX <= hb.x + hb.n * (hb.slot + hb.gap)) {
+      switchWeapon(Math.floor((e.clientX - hb.x) / (hb.slot + hb.gap)));
+      return;
+    }
     if (e.clientX < innerWidth * 0.42 && Input.mvId == null) { Input.mvId = e.pointerId; Input.mvO = { x: e.clientX, y: e.clientY }; place(Input.mvO, e.clientX, e.clientY); }
     else if (Input.lookId == null) { Input.lookId = e.pointerId; Input.lookP = { x: e.clientX, y: e.clientY }; }
     try { cv.setPointerCapture(e.pointerId); } catch (err) {}
@@ -312,6 +346,8 @@ function setupTouch() {
   btn("#t-inv", () => UI.openInv());
   btn("#t-map", () => { G.showMap = !G.showMap; });
   btn("#t-pause", () => UI.pause());
+  btn("#t-home", () => { releaseAll(); UI.askExit(); });
+  btn("#t-help", () => { releaseAll(); UI.open("help"); UI.helpBack = "play"; });
   btn("#t-run", () => { Input.sprintToggle = !Input.sprintToggle; G.input.sprint = Input.sprintToggle; $("#t-run").classList.toggle("on", Input.sprintToggle); });
 }
 
@@ -331,15 +367,17 @@ function boot() {
     Sound.init();
     if (G.state !== "play" || UI.modal) return;
     if (G.showMap) { G.showMap = false; return; }
-    if (!Input.locked) { requestLock(); return; }
+    if (!Input.locked && !Input.noLock) { requestLock(); return; }
     if (e.button === 0) G.input.attack = true;
     if (e.button === 2) G.input.interact = true;
   });
   addEventListener("mouseup", e => { if (e.button === 0) G.input.attack = false; if (e.button === 2) G.input.interact = false; });
-  document.addEventListener("mousemove", e => { if (Input.locked && G.state === "play" && !UI.modal) look(e.movementX, e.movementY, Input.sens); });
+  document.addEventListener("mousemove", e => { if ((Input.locked || Input.noLock) && G.state === "play" && !UI.modal && !Input.touch) look(e.movementX, e.movementY, Input.sens); });
+  // some frames refuse pointer lock: then the mouse turns the view without capturing the cursor
+  document.addEventListener("pointerlockerror", () => { Input.noLock = true; });
   document.addEventListener("pointerlockchange", () => {
     Input.locked = document.pointerLockElement === cv;
-    if (!Input.locked) { G.input.attack = false; if (G.state === "play" && !UI.modal && !G.showMap) UI.pause(); }
+    if (!Input.locked && !Input.noLock) { G.input.attack = false; if (G.state === "play" && !UI.modal && !G.showMap) UI.pause(); }
   });
   cv.addEventListener("wheel", e => { if (G.state === "play" && !UI.modal) cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   cv.addEventListener("contextmenu", e => e.preventDefault());
@@ -348,7 +386,7 @@ function boot() {
   $("#new").onclick = () => startIntro();
   $("#continue").onclick = continueGame;
   $("#help-btn").onclick = () => { $("#title").hidden = true; UI.open("help"); UI.helpBack = "title"; };
-  $("#help-close").onclick = () => { UI.close(); if (UI.helpBack === "title") { $("#title").hidden = false; } else UI.pause(); };
+  $("#help-close").onclick = () => { UI.close(); if (UI.helpBack === "title") { $("#title").hidden = false; } else if (UI.helpBack === "play") requestLock(); else UI.pause(); };
   const back = () => { UI.close(); requestLock(); };
   $("#note-close").onclick = back;
   $("#inv-close").onclick = back;
@@ -357,13 +395,24 @@ function boot() {
   $("#p-journal").onclick = () => UI.openJournal();
   $("#p-help").onclick = () => { UI.open("help"); UI.helpBack = "pause"; };
   $("#snd-btn").onclick = () => { Sound.init(); Sound.toggleMute(); $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл"); };
-  $("#shd-btn").onclick = () => { setShadows(!V.shadows); $("#shd-btn").textContent = "Тени: " + (V.shadows ? "вкл" : "выкл"); };
-  $("#to-title").onclick = () => toTitle();
+  $("#q-btn").onclick = () => { const order = ["low", "mid", "high"]; setQuality(order[(order.indexOf(V.quality) + 1) % 3]); UI.syncSettings(); };
+  $("#scare-btn").onclick = () => { Settings.scares = !Settings.scares; saveSettings(); UI.syncSettings(); };
+  $("#sens").oninput = e => { Settings.sens = +e.target.value; saveSettings(); $("#sens-v").textContent = Settings.sens.toFixed(1) + "×"; };
+  $("#to-title").onclick = () => UI.askExit();
+  $("#exit-save").onclick = () => exitToTitle(true);
+  $("#exit-nosave").onclick = () => exitToTitle(false);
+  $("#exit-cancel").onclick = () => { UI.close(); if (G.state === "play") requestLock(); };
+  $("#guide-btn").onclick = () => UI.openGuide();
+  $("#p-guide").onclick = () => UI.openGuide();
+  $("#help-guide").onclick = () => UI.openGuide();
+  $("#guide-close").onclick = () => { UI.close(); if (G.state === "play") requestLock(); else $("#title").hidden = false; };
+  $("#title-guide").onclick = () => { $("#title").hidden = true; UI.openGuide(); };
   $("#dead-load").onclick = () => continueGame();
   $("#dead-new").onclick = () => startIntro();
   $("#end-title").onclick = () => toTitle();
 
   toTitle();
+  const tAct = $("#t-act");
   let last = performance.now();
   const frame = now => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -374,6 +423,7 @@ function boot() {
       G.p.a += dt * 0.12; G.p.light = true;
       Sound.update(dt, 1, 0, false);
     } else Sound.update(dt, G.night, 0, false);
+    if (Input.touch) tAct.classList.toggle("ready", running && !!G.target);
     render3d(running || G.state === "title" || G.state === "intro" ? dt : 0);
     renderHud(running ? dt : 0);
     requestAnimationFrame(frame);

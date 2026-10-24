@@ -10,11 +10,11 @@ const G = {
   inv: {}, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {},
   msgs: [], shake: 0, flash: 0, hurtFlash: 0, lightOff: 0, noise: null, spawnT: 5, flowT: 0, hallT: 15, whisperT: 20,
   rays: [], night: 0, boss: null, endT: 0, bossDead: false, inside: null, swingT: 0,
-  input: { up: 0, down: 0, left: 0, right: 0, sprint: false, attack: false, interact: false, aimX: 0, aimY: 0, mvX: 0, mvY: 0, touchAim: false },
+  input: { up: 0, down: 0, left: 0, right: 0, sprint: false, attack: false, interact: false, mvX: 0, mvY: 0 },
 };
 
 function newPlayer() {
-  return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, hp: 100, sta: 100, san: 100, bat: 100, light: true,
+  return { x: World.start.x, y: World.start.y, r: 12, a: -Math.PI / 2, pitch: 0, hp: 100, sta: 100, san: 100, bat: 100, light: true,
     atkCd: 0, reloadT: 0, iframe: 0, staLock: 0, stepT: 0, act: null, actProg: 0, actTick: 0, moving: false };
 }
 
@@ -77,6 +77,7 @@ function load() {
   for (const [i, left, regrow] of d.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; }
   (d.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
   Object.assign(G.p, d.p);
+  World.dirty = true;
   G.p.light = true;
   return true;
 }
@@ -117,8 +118,22 @@ function finishReload() {
 
 function aimPoint() {
   const p = G.p;
-  if (G.input.touchAim || !Input.mouseActive) return { x: p.x + Math.cos(p.a) * 260, y: p.y + Math.sin(p.a) * 260 };
-  return { x: G.input.aimX, y: G.input.aimY };
+  const d = clamp(260 + (p.pitch || 0) * 300, 120, 360);
+  return { x: p.x + Math.cos(p.a) * d, y: p.y + Math.sin(p.a) * d };
+}
+
+// on touch screens, nudge the aim toward a creature close to the crosshair
+function assistAim(range) {
+  if (!Input.touch) return;
+  const p = G.p;
+  let best = null, ba = 0.16;
+  for (const m of G.mons) {
+    const d = Math.hypot(m.x - p.x, m.y - p.y);
+    if (d > range + m.r) continue;
+    const da = Math.abs(angDiff(p.a, Math.atan2(m.y - p.y, m.x - p.x)));
+    if (da < ba && !wallBetween(p.x, p.y, m.x, m.y)) { ba = da; best = m; }
+  }
+  if (best) p.a = Math.atan2(best.y - p.y, best.x - p.x);
 }
 
 function makeNoise(x, y, r) { G.noise = { x, y, r, t: 0.5 }; }
@@ -127,6 +142,7 @@ function attack() {
   const p = G.p, w = curW();
   if (p.atkCd > 0 || p.reloadT > 0) return;
   if (w.kind === "melee") {
+    assistAim(w.range + 30);
     p.atkCd = w.cd; G.swingT = 0.18; Sound.swing();
     let hit = false;
     for (const m of G.mons) {
@@ -143,7 +159,7 @@ function attack() {
   }
   if (w.kind === "throw") {
     if (!(G.inv.molotov > 0)) { toast("Нет коктейлей Молотова", 1.5); p.atkCd = 0.5; return; }
-    G.inv.molotov--; p.atkCd = w.cd;
+    G.inv.molotov--; p.atkCd = w.cd; G.kick = 1;
     const t = aimPoint(); let dx = t.x - p.x, dy = t.y - p.y; const l = Math.hypot(dx, dy) || 1;
     const d = Math.min(l, 360);
     G.projs.push({ kind: "bottle", sx: p.x, sy: p.y, tx: p.x + dx / l * d, ty: p.y + dy / l * d, t: 0, dur: 0.25 + d / 900, x: p.x, y: p.y });
@@ -152,11 +168,12 @@ function attack() {
   }
   // guns and crossbow
   const m = G.mag[w.id] || 0;
+  if (m > 0) assistAim(w.kind === "bow" ? 900 : w.range);
   if (m <= 0) {
     if (G.inv[w.ammo] > 0) startReload(); else { Sound.click(); p.atkCd = 0.3; toast(`Нет боеприпасов: ${ITEMS[w.ammo].n}`, 1.5); }
     return;
   }
-  G.mag[w.id] = m - 1; p.atkCd = w.cd;
+  G.mag[w.id] = m - 1; p.atkCd = w.cd; G.kick = 1;
   const mx = p.x + Math.cos(p.a) * 18, my = p.y + Math.sin(p.a) * 18;
   if (w.kind === "bow") {
     G.projs.push({ kind: "bolt", x: mx, y: my, vx: Math.cos(p.a) * w.speed, vy: Math.sin(p.a) * w.speed, dmg: w.dmg, life: 0.9, pierce: 3, hit: [] });
@@ -662,7 +679,7 @@ function doInteract(o) {
 function finishGather(o) {
   const g = GATHER[o.type];
   for (const [k, q] of g.give()) addItem(k, q);
-  o.left--;
+  o.left--; World.dirty = true;
   if (o.left <= 0) { o.regrow = G.day + g.regrow; if (o.type === "rock" || o.type === "scrap") o.block = false; }
   Sound.pickup();
 }
@@ -688,6 +705,7 @@ function sleep() {
 function newDay() {
   G.day++;
   for (const o of World.res) if (o.regrow && o.regrow <= G.day) { o.left = o.max; o.regrow = 0; o.block = o.type !== "bush"; }
+  World.dirty = true;
   for (const o of World.inter) if (o.type === "crate" && !o.full && Math.random() < 0.5) o.full = true;
 }
 
@@ -785,7 +803,9 @@ function update(dt) {
   if (!G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
 
   // movement
-  let mx = inp.mvX + (inp.right - inp.left), my = inp.mvY + (inp.down - inp.up);
+  // first person: forward/strafe relative to where the player looks
+  const fw = (inp.up - inp.down) - inp.mvY, st = (inp.right - inp.left) + inp.mvX;
+  let mx = Math.cos(p.a) * fw - Math.sin(p.a) * st, my = Math.sin(p.a) * fw + Math.cos(p.a) * st;
   const ml = Math.hypot(mx, my);
   if (ml > 1) { mx /= ml; my /= ml; }
   p.moving = ml > 0.1;
@@ -802,9 +822,6 @@ function update(dt) {
   if (p.moving) { p.stepT -= dt * spd / 150; if (p.stepT <= 0) { p.stepT = 0.38; Sound.step(); } }
 
   // aim
-  if (inp.touchAim) p.a = Math.atan2(inp.aimDY, inp.aimDX);
-  else if (Input.mouseActive) p.a = Math.atan2(inp.aimY - p.y, inp.aimX - p.x);
-  else if (p.moving) p.a = Math.atan2(my, mx);
 
   // timers
   p.atkCd = Math.max(0, p.atkCd - dt);

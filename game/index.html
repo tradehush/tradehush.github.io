@@ -6,24 +6,25 @@
 <meta name="theme-color" content="#050605">
 <meta name="color-scheme" content="dark only">
 <title>Чёрная Сосна</title>
-<meta name="description" content="Хоррор-выживание в ночном лесу: добывай ресурсы, крафти оружие, убивай тварей и найди пропавшую сестру.">
+<meta name="description" content="3D хоррор-выживание в ночном лесу: добывай ресурсы, крафти оружие, убивай тварей и найди пропавшую сестру.">
 <link rel="icon" type="image/png" href="../icons/favicon-32.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="hud"></canvas>
 <div id="fade"></div>
 
 <div id="title" class="screen" hidden>
   <div class="title-box">
     <h1>ЧЁРНАЯ<br>СОСНА</h1>
-    <p class="sub">хоррор-выживание</p>
+    <p class="sub">3D хоррор-выживание</p>
     <div class="menu">
       <button class="btn" id="continue" hidden>Продолжить</button>
       <button class="btn" id="new">Новая игра</button>
       <button class="btn ghost" id="help-btn">Управление</button>
     </div>
-    <p class="hint">Играть лучше в наушниках и в темноте.</p>
+    <p class="hint">Играть лучше в наушниках и в темноте.<br><span class="touch-only">Поверни телефон горизонтально.</span></p>
   </div>
 </div>
 
@@ -39,8 +40,8 @@
       <ul class="keys">
         <li><kbd>W A S D</kbd> идти</li>
         <li><kbd>Shift</kbd> бег</li>
-        <li><kbd>Мышь</kbd> целиться, <kbd>ЛКМ</kbd> атака</li>
-        <li><kbd>E</kbd> действие (держать — рубить/копать)</li>
+        <li><kbd>Мышь</kbd> смотреть, <kbd>ЛКМ</kbd> атака</li>
+        <li><kbd>E</kbd> / <kbd>ПКМ</kbd> действие (держать — рубить/копать)</li>
         <li><kbd>F</kbd> фонарь</li>
         <li><kbd>R</kbd> перезарядка</li>
         <li><kbd>1–8</kbd>, <kbd>Q</kbd>, колесо — оружие</li>
@@ -49,7 +50,7 @@
         <li><kbd>J</kbd> журнал, <kbd>M</kbd> карта, <kbd>Esc</kbd> пауза</li>
       </ul>
       <div>
-        <p><b>На телефоне:</b> левая половина экрана — стик движения (отведи дальше — бег), правая — прицел (оттяни — атака, тап — удар). Кнопки справа: действие, фонарь, перезарядка, смена оружия.</p>
+        <p><b>На телефоне:</b> левый палец — стик движения (отведи дальше — бег), правый — води по экрану, чтобы смотреть. Большая кнопка ⚔ — атака (её тоже можно тянуть, чтобы поворачиваться), ✋ — действие (держать — рубить/копать), 🔦 фонарь, ⟳ перезарядка, ⇄ оружие. Прицел слегка доводится на тварей.</p>
         <p><b>Советы.</b> Ночью твари сильнее и их больше. Свет фонаря и костры держат рассудок. Если рассудок упадёт — начнутся видения, а потом лес начнёт есть тебя. Спать и сохраняться можно в кровати в доме лесника.</p>
         <p>Тень замирает, когда на неё светят фонарём. Не отворачивайся.</p>
       </div>
@@ -101,6 +102,7 @@
       <button class="btn ghost" id="p-journal">Журнал</button>
       <button class="btn ghost" id="p-help">Управление</button>
       <button class="btn ghost" id="snd-btn">Звук: вкл</button>
+      <button class="btn ghost" id="shd-btn">Тени: вкл</button>
       <button class="btn ghost" id="to-title">В главное меню</button>
     </div>
     <p class="hint">Игра сохраняется, когда спишь в кровати, и на ключевых моментах сюжета.</p>
@@ -128,13 +130,13 @@
 
 <div id="touch" hidden>
   <div id="stickL" class="stick" hidden><i></i></div>
-  <div id="stickR" class="stick" hidden><i></i></div>
   <div class="tbar top">
     <button id="t-map" class="tb">🗺</button>
     <button id="t-inv" class="tb">🎒</button>
     <button id="t-pause" class="tb">❚❚</button>
   </div>
   <div class="tbar side">
+    <button id="t-atk" class="tb huge">⚔</button>
     <button id="t-act" class="tb big">✋</button>
     <button id="t-swap" class="tb">⇄</button>
     <button id="t-reload" class="tb">⟳</button>
@@ -144,11 +146,13 @@
   </div>
 </div>
 
+<script src="vendor/three.min.js"></script>
 <script src="js/data.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/world.js"></script>
 <script src="js/game.js"></script>
-<script src="js/render.js"></script>
+<script src="js/scene3d.js"></script>
+<script src="js/hud.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

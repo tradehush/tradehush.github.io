@@ -256,6 +256,7 @@ function generateWorld(seed) {
   for (let i = 0; i < 2600; i++) World.props.push({ x: rnd() * WORLD_W, y: rnd() * WORLD_H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
 
   buildNav();
+  World.dirty = true;
 }
 
 // --- collision ------------------------------------------------------------------

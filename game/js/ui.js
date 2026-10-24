@@ -4,14 +4,15 @@
 const $ = s => document.querySelector(s);
 
 const Input = {
-  mx: 0, my: 0, mouseActive: false, touch: false, keys: new Set(),
-  sprintToggle: false, mvId: null, aimId: null, mvO: null, aimO: null,
+  touch: false, locked: false, sens: 0.0026,
+  sprintToggle: false, mvId: null, lookId: null, mvO: null, lookP: null,
 };
 
 const UI = {
   modal: null,
   open(id) {
     this.closeAll();
+    if (document.pointerLockElement) document.exitPointerLock();
     this.modal = id;
     $("#" + id).hidden = false;
     G.input.attack = false; G.input.interact = false;
@@ -94,6 +95,7 @@ const UI = {
   pause() {
     if (G.state !== "play") return;
     $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
+    $("#shd-btn").textContent = "Тени: " + (V.shadows ? "вкл" : "выкл");
     this.open("pause");
   },
 };
@@ -127,9 +129,9 @@ const END_BAD = `Хозяин рухнул… но шёпот не стих. О�
 function toTitle() {
   newGame();
   G.state = "title";
-  G.p.x = 1300; G.p.y = 2800;
-  R.cam.x = G.p.x; R.cam.y = G.p.y;
+  G.p.x = 1310; G.p.y = 2820; G.p.pitch = -0.08;
   UI.closeAll();
+  $("#touch").hidden = true;
   $("#title").hidden = false;
   $("#continue").hidden = !hasSave();
 }
@@ -151,30 +153,49 @@ function startIntro() {
   };
 }
 
-function startPlay() {
+function enterPlay() {
   UI.closeAll();
   G.state = "play";
-  R.cam.x = G.p.x; R.cam.y = G.p.y;
   $("#touch").hidden = !Input.touch;
+  requestLock();
+  goFullscreen();
+}
+
+function startPlay() {
+  enterPlay();
+  G.p.a = -Math.PI / 2 + 0.25;
   toast("Дорога ведёт на север, к дому лесника.", 4);
-  toast(Input.touch ? "Левый стик — идти, правый — целиться и бить" : "WASD — идти, мышь — целиться, ЛКМ — бить, E — действие", 5);
+  toast(Input.touch ? "Левый палец — идти, правый — смотреть. Кнопки справа." : "WASD — идти, мышь — смотреть, ЛКМ — бить, E — действие", 5);
 }
 
 function continueGame() {
   Sound.init();
   if (!load()) { startIntro(); return; }
-  UI.closeAll();
-  G.state = "play";
-  R.cam.x = G.p.x; R.cam.y = G.p.y;
-  $("#touch").hidden = !Input.touch;
+  enterPlay();
   toast(`День ${G.day}. Игра загружена.`, 3);
+}
+
+// on phones: full screen and landscape when the browser allows it
+function goFullscreen() {
+  if (!Input.touch) return;
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: "hide" }) : null;
+    if (p && p.then) p.then(() => { try { screen.orientation.lock("landscape").catch(() => {}); } catch (e) {} }).catch(() => {});
+  } catch (e) {}
+}
+
+function requestLock() {
+  if (Input.touch) return;
+  const cv = V.renderer.domElement;
+  try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
 }
 
 // --- keyboard & mouse -----------------------------------------------------------------
 
 function onKey(e, down) {
   const k = e.code;
-  if (down && Sound) Sound.init();
+  if (down) Sound.init();
   const inp = G.input;
   if (["KeyW", "ArrowUp"].includes(k)) inp.up = down ? 1 : 0;
   else if (["KeyS", "ArrowDown"].includes(k)) inp.down = down ? 1 : 0;
@@ -185,13 +206,13 @@ function onKey(e, down) {
   if (k === "Tab") e.preventDefault();
   if (!down || e.repeat) return;
   if (k === "Escape") {
-    if (G.showMap) { G.showMap = false; return; }
+    if (G.showMap) { G.showMap = false; requestLock(); return; }
     if (UI.modal && G.state === "play") { UI.close(); return; }
     UI.pause(); return;
   }
   if (G.state !== "play") return;
-  if (k === "Tab" || k === "KeyI") { if (UI.modal === "inv") UI.close(); else if (!UI.modal) UI.openInv(); return; }
-  if (k === "KeyJ") { if (UI.modal === "journal") UI.close(); else if (!UI.modal) UI.openJournal(); return; }
+  if (k === "Tab" || k === "KeyI") { if (UI.modal === "inv") { UI.close(); requestLock(); } else if (!UI.modal) UI.openInv(); return; }
+  if (k === "KeyJ") { if (UI.modal === "journal") { UI.close(); requestLock(); } else if (!UI.modal) UI.openJournal(); return; }
   if (k === "KeyM") { if (!UI.modal) G.showMap = !G.showMap; return; }
   if (UI.modal || G.showMap) return;
   if (k === "KeyF") toggleLight();
@@ -209,37 +230,43 @@ function toggleLight() {
   p.light = !p.light; Sound.click();
 }
 
+function look(dx, dy, k) {
+  const p = G.p;
+  p.a += dx * k;
+  p.pitch = clamp((p.pitch || 0) - dy * k, -1.1, 0.9);
+}
+
+function releaseAll() {
+  const inp = G.input;
+  inp.attack = false; inp.interact = false; inp.up = inp.down = inp.left = inp.right = 0; inp.mvX = inp.mvY = 0; inp.sprint = false;
+}
+
 addEventListener("keydown", e => onKey(e, true));
 addEventListener("keyup", e => onKey(e, false));
-addEventListener("blur", () => { G.input.attack = false; G.input.interact = false; G.input.up = G.input.down = G.input.left = G.input.right = 0; G.input.sprint = false; UI.pause(); });
-
-function updateAim() {
-  const w = screenToWorld(Input.mx, Input.my);
-  G.input.aimX = w.x; G.input.aimY = w.y;
-}
+addEventListener("blur", () => { releaseAll(); UI.pause(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { releaseAll(); UI.pause(); } });
 
 // --- touch ------------------------------------------------------------------------------
 
 function setupTouch() {
-  const cv = R.cv;
-  const sL = $("#stickL"), sR = $("#stickR");
+  const cv = V.renderer.domElement;
+  const sL = $("#stickL");
   const R0 = 60;
-  const place = (el, o, x, y) => {
-    el.hidden = false;
-    el.style.left = o.x + "px"; el.style.top = o.y + "px";
+  const place = (o, x, y) => {
+    sL.hidden = false;
+    sL.style.left = o.x + "px"; sL.style.top = o.y + "px";
     const dx = clamp(x - o.x, -R0, R0), dy = clamp(y - o.y, -R0, R0);
-    el.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`;
+    sL.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`;
   };
   cv.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse") return;
     Sound.init();
     if (!Input.touch) { Input.touch = true; if (G.state === "play") $("#touch").hidden = false; }
-    Input.mouseActive = false;
     if (G.state !== "play" || UI.modal) return;
     if (G.showMap) { G.showMap = false; return; }
-    if (e.clientX < innerWidth / 2 && Input.mvId == null) { Input.mvId = e.pointerId; Input.mvO = { x: e.clientX, y: e.clientY }; place(sL, Input.mvO, e.clientX, e.clientY); }
-    else if (Input.aimId == null) { Input.aimId = e.pointerId; Input.aimO = { x: e.clientX, y: e.clientY }; place(sR, Input.aimO, e.clientX, e.clientY); }
-    cv.setPointerCapture(e.pointerId);
+    if (e.clientX < innerWidth * 0.42 && Input.mvId == null) { Input.mvId = e.pointerId; Input.mvO = { x: e.clientX, y: e.clientY }; place(Input.mvO, e.clientX, e.clientY); }
+    else if (Input.lookId == null) { Input.lookId = e.pointerId; Input.lookP = { x: e.clientX, y: e.clientY }; }
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
   });
   cv.addEventListener("pointermove", e => {
     if (e.pointerType === "mouse") return;
@@ -248,53 +275,72 @@ function setupTouch() {
       const dx = e.clientX - Input.mvO.x, dy = e.clientY - Input.mvO.y, l = Math.hypot(dx, dy);
       const k = Math.min(1, l / R0) / (l || 1);
       inp.mvX = dx * k; inp.mvY = dy * k;
-      inp.sprint = Input.sprintToggle || l > R0 * 1.15;
-      place(sL, Input.mvO, e.clientX, e.clientY);
-    } else if (e.pointerId === Input.aimId) {
-      const dx = e.clientX - Input.aimO.x, dy = e.clientY - Input.aimO.y, l = Math.hypot(dx, dy);
-      if (l > 12) { inp.touchAim = true; inp.aimDX = dx; inp.aimDY = dy; }
-      inp.attack = l > R0 * 0.55;
-      place(sR, Input.aimO, e.clientX, e.clientY);
+      inp.sprint = Input.sprintToggle || l > R0 * 1.25;
+      place(Input.mvO, e.clientX, e.clientY);
+    } else if (e.pointerId === Input.lookId && G.state === "play" && !UI.modal) {
+      look(e.clientX - Input.lookP.x, e.clientY - Input.lookP.y, 0.0058);
+      Input.lookP = { x: e.clientX, y: e.clientY };
     }
   });
   const end = e => {
     const inp = G.input;
     if (e.pointerId === Input.mvId) { Input.mvId = null; inp.mvX = inp.mvY = 0; inp.sprint = Input.sprintToggle; sL.hidden = true; }
-    if (e.pointerId === Input.aimId) {
-      // a short tap on the right side is a single attack
-      if (!inp.attack && G.state === "play") { const was = inp.touchAim; inp.attack = true; setTimeout(() => { inp.attack = false; }, 60); inp.touchAim = was; }
-      else inp.attack = false;
-      Input.aimId = null; inp.touchAim = false; sR.hidden = true;
-    }
+    if (e.pointerId === Input.lookId) Input.lookId = null;
   };
   cv.addEventListener("pointerup", end);
   cv.addEventListener("pointercancel", end);
 
-  const hold = (id, on, off) => {
+  // buttons; the attack button also lets the finger drag to look around while holding it
+  const btn = (id, on, off) => {
     const b = $(id);
-    b.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); Sound.init(); on(); });
-    if (off) { b.addEventListener("pointerup", off); b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off); }
+    b.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation(); Sound.init(); on(e);
+      try { b.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    if (off) { b.addEventListener("pointerup", off); b.addEventListener("pointercancel", off); }
+    b.addEventListener("contextmenu", e => e.preventDefault());
+    return b;
   };
-  hold("#t-act", () => { G.input.interact = true; }, () => { G.input.interact = false; });
-  hold("#t-light", () => toggleLight());
-  hold("#t-reload", () => startReload());
-  hold("#t-swap", () => cycleWeapon(1));
-  hold("#t-heal", () => quickHeal());
-  hold("#t-inv", () => UI.openInv());
-  hold("#t-map", () => { G.showMap = !G.showMap; });
-  hold("#t-pause", () => UI.pause());
-  hold("#t-run", () => { Input.sprintToggle = !Input.sprintToggle; G.input.sprint = Input.sprintToggle; $("#t-run").classList.toggle("on", Input.sprintToggle); });
+  let atkP = null;
+  const atk = btn("#t-atk", e => { G.input.attack = true; atkP = { x: e.clientX, y: e.clientY }; }, () => { G.input.attack = false; atkP = null; });
+  atk.addEventListener("pointermove", e => { if (atkP && G.state === "play") { look(e.clientX - atkP.x, e.clientY - atkP.y, 0.0045); atkP = { x: e.clientX, y: e.clientY }; } });
+  btn("#t-act", () => { G.input.interact = true; }, () => { G.input.interact = false; });
+  btn("#t-light", () => toggleLight());
+  btn("#t-reload", () => startReload());
+  btn("#t-swap", () => cycleWeapon(1));
+  btn("#t-heal", () => quickHeal());
+  btn("#t-inv", () => UI.openInv());
+  btn("#t-map", () => { G.showMap = !G.showMap; });
+  btn("#t-pause", () => UI.pause());
+  btn("#t-run", () => { Input.sprintToggle = !Input.sprintToggle; G.input.sprint = Input.sprintToggle; $("#t-run").classList.toggle("on", Input.sprintToggle); });
 }
 
 // --- boot -------------------------------------------------------------------------------
 
 function boot() {
-  initRender();
-  Input.touch = matchMedia("(pointer: coarse)").matches;
-  const cv = R.cv;
-  cv.addEventListener("mousemove", e => { Input.mx = e.clientX; Input.my = e.clientY; Input.mouseActive = true; });
-  cv.addEventListener("mousedown", e => { if (e.button === 0 && G.state === "play" && !UI.modal) { if (G.showMap) G.showMap = false; else G.input.attack = true; } Sound.init(); });
-  addEventListener("mouseup", e => { if (e.button === 0) G.input.attack = false; });
+  Input.touch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
+  // the world has to exist before the 3D scene is built from it
+  newGame();
+  try { initScene(); } catch (e) {
+    document.body.innerHTML = '<p style="padding:24px;font:16px sans-serif;color:#ddd">Не удалось запустить 3D (WebGL). Обнови браузер или включи аппаратное ускорение.</p>';
+    return;
+  }
+  initHud();
+  const cv = V.renderer.domElement;
+  cv.addEventListener("mousedown", e => {
+    Sound.init();
+    if (G.state !== "play" || UI.modal) return;
+    if (G.showMap) { G.showMap = false; return; }
+    if (!Input.locked) { requestLock(); return; }
+    if (e.button === 0) G.input.attack = true;
+    if (e.button === 2) G.input.interact = true;
+  });
+  addEventListener("mouseup", e => { if (e.button === 0) G.input.attack = false; if (e.button === 2) G.input.interact = false; });
+  document.addEventListener("mousemove", e => { if (Input.locked && G.state === "play" && !UI.modal) look(e.movementX, e.movementY, Input.sens); });
+  document.addEventListener("pointerlockchange", () => {
+    Input.locked = document.pointerLockElement === cv;
+    if (!Input.locked) { G.input.attack = false; if (G.state === "play" && !UI.modal && !G.showMap) UI.pause(); }
+  });
   cv.addEventListener("wheel", e => { if (G.state === "play" && !UI.modal) cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   cv.addEventListener("contextmenu", e => e.preventDefault());
   setupTouch();
@@ -303,13 +349,15 @@ function boot() {
   $("#continue").onclick = continueGame;
   $("#help-btn").onclick = () => { $("#title").hidden = true; UI.open("help"); UI.helpBack = "title"; };
   $("#help-close").onclick = () => { UI.close(); if (UI.helpBack === "title") { $("#title").hidden = false; } else UI.pause(); };
-  $("#note-close").onclick = () => UI.close();
-  $("#inv-close").onclick = () => UI.close();
-  $("#journal-close").onclick = () => UI.close();
-  $("#resume").onclick = () => UI.close();
+  const back = () => { UI.close(); requestLock(); };
+  $("#note-close").onclick = back;
+  $("#inv-close").onclick = back;
+  $("#journal-close").onclick = back;
+  $("#resume").onclick = back;
   $("#p-journal").onclick = () => UI.openJournal();
   $("#p-help").onclick = () => { UI.open("help"); UI.helpBack = "pause"; };
   $("#snd-btn").onclick = () => { Sound.init(); Sound.toggleMute(); $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл"); };
+  $("#shd-btn").onclick = () => { setShadows(!V.shadows); $("#shd-btn").textContent = "Тени: " + (V.shadows ? "вкл" : "выкл"); };
   $("#to-title").onclick = () => toTitle();
   $("#dead-load").onclick = () => continueGame();
   $("#dead-new").onclick = () => startIntro();
@@ -320,15 +368,14 @@ function boot() {
   const frame = now => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const running = G.state === "play" && !UI.modal && !G.showMap;
-    if (Input.mouseActive) updateAim();
     if (running) update(dt);
     else if (G.state === "title" || G.state === "intro") {
       G.night = 1;
-      G.p.a += dt * 0.25; G.p.light = true;
-      computeRays();
+      G.p.a += dt * 0.12; G.p.light = true;
       Sound.update(dt, 1, 0, false);
     } else Sound.update(dt, G.night, 0, false);
-    if (G.p) render(running || G.state === "title" ? dt : 0);
+    render3d(running || G.state === "title" || G.state === "intro" ? dt : 0);
+    renderHud(running ? dt : 0);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

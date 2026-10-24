@@ -5,7 +5,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
   font: 15px/1.5 Georgia, "Times New Roman", serif; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 canvas { display: block; touch-action: none; }
-#c { position: fixed; inset: 0; filter: saturate(0.72) contrast(1.12) brightness(1.04) sepia(0.12); }
+#c { position: fixed; inset: 0; filter: saturate(0.94) contrast(1.08) brightness(1.03) sepia(0.05); }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 .touch-only { display: none; }
 @media (pointer: coarse) and (orientation: portrait) { .touch-only { display: inline; } }
@@ -153,3 +153,15 @@ kbd { font: 12px ui-monospace, monospace; background: #222; border: 1px solid #4
 #touch.mapopen .tbar.side, #touch.mapopen .tbar.top, #touch.mapopen #stickL { display: none; }
 #t-del { display: none; }
 #touch.moving #t-del { display: flex; }
+.quick { display: flex; gap: 8px; margin-bottom: 6px; }
+.qslot { position: relative; width: 46px; height: 46px; border-radius: 10px; border: 1px solid rgba(216,200,144,.45); background: rgba(20,18,14,.7); color: #fff; font-size: 22px; display: grid; place-items: center; padding: 0; }
+.qslot.empty { border-style: dashed; opacity: .55; }
+.qslot small { position: absolute; right: 4px; bottom: 2px; font: 600 10px ui-monospace, monospace; color: var(--ink); }
+.urow { display: flex; gap: 6px; align-items: center; width: 100%; }
+.urow > :first-child { flex: 1; text-align: left; }
+.urow span { font-size: 13px; }
+.qbtn { flex: none; white-space: nowrap; }
+.qbtn.on { border-color: #c8a860; color: #e8d690; }
+#t-heal { display: none; }
+#touch.lowhp #t-heal { display: grid; animation: healpulse 1s ease-in-out infinite; border-color: #e05040; }
+@keyframes healpulse { 50% { background: rgba(160,30,20,.55); } }

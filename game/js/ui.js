@@ -43,13 +43,30 @@ const UI = {
       li.innerHTML = `<span>${ITEMS[k].icon} ${ITEMS[k].n}</span><b>${G.inv[k]}</b>`;
       res.appendChild(li);
     }
-    for (const k of ["bandage", "medkit", "tea", "battery", ...Object.keys(ITEMS).filter(k => ITEMS[k].food)]) {
+    // quick bar slots: tap a slot to empty it
+    const qbox = $("#inv-quick"); qbox.innerHTML = "";
+    G.quick.forEach((k, i) => {
+      const s = document.createElement("button");
+      s.className = "qslot" + (k ? "" : " empty");
+      s.innerHTML = k ? `${quickIcon(k)}<small>${k.startsWith("w:") ? "" : G.inv[k] || 0}</small>` : `<small>${i + 1}</small>`;
+      s.title = k ? "Убрать из панели" : "Пустой слот";
+      s.onclick = () => { G.quick[i] = null; this.renderInv(); };
+      qbox.appendChild(s);
+    });
+    const row = (k, label, act) => {
+      const d = document.createElement("div"); d.className = "urow";
+      if (act) { const b = document.createElement("button"); b.className = "btn small"; b.textContent = label; b.onclick = () => { act(); this.renderInv(); }; d.appendChild(b); }
+      else { const sp = document.createElement("span"); sp.textContent = label; d.appendChild(sp); }
+      const q = document.createElement("button"); const on = G.quick.includes(k);
+      q.className = "btn small ghost qbtn" + (on ? " on" : ""); q.textContent = on ? "⚡ в панели" : "⚡ в панель";
+      q.onclick = () => { toggleQuick(k); this.renderInv(); };
+      d.appendChild(q); use.appendChild(d);
+    };
+    for (const k of [...USABLE, ...Object.keys(ITEMS).filter(k => ITEMS[k].food)]) {
       if (!(G.inv[k] > 0)) continue;
-      const b = document.createElement("button");
-      b.className = "btn small"; b.textContent = `${ITEMS[k].food ? "Съесть: " : ""}${ITEMS[k].icon} ${ITEMS[k].n} (${G.inv[k]})`;
-      b.onclick = () => { useItem(k); this.renderInv(); };
-      use.appendChild(b);
+      row(k, `${ITEMS[k].food ? "Съесть: " : ""}${ITEMS[k].icon} ${ITEMS[k].n} (${G.inv[k]})`, () => useItem(k));
     }
+    for (const id of G.owned) row("w:" + id, `${WICON[id] || ""} ${WEAPONS[W_IDX[id]].n}`, null);
     if (!use.children.length) use.innerHTML = `<span class="muted">Нечего использовать</span>`;
     const bench = nearBench();
     $("#inv-bench").textContent = bench ? "🔨 Ты у верстака — доступен весь крафт" : "Без верстака доступен только простой крафт. Верстаки: дом лесника, хижина охотника.";
@@ -285,6 +302,7 @@ function onKey(e, down) {
   else if (k === "KeyH") quickHeal();
   else if (k === "KeyG") useItem("tea");
   else if (k === "KeyB") useItem("battery");
+  else if (/^Digit[5-8]$/.test(k) && G.quick[+k.slice(5) - 5]) useQuick(+k.slice(5) - 5);
   else if (/^Digit[1-8]$/.test(k)) switchWeapon(+k.slice(5) - 1);
 }
 
@@ -330,6 +348,8 @@ function setupTouch() {
     if (G.state !== "play" || UI.modal) return;
     if (G.showMap) { mapTouchT = performance.now(); mapDown(e); try { cv.setPointerCapture(e.pointerId); } catch (err) {} return; }
     $("#qmenu").hidden = true;
+    const qb = (R.quick || []).find(b => e.clientX >= b.x && e.clientX <= b.x + b.s && e.clientY >= b.y && e.clientY <= b.y + b.s);
+    if (qb) { useQuick(qb.i); return; }
     const hb = R.hotbar;
     if (hb && e.clientY >= hb.y && e.clientY <= hb.y + hb.slot && e.clientX >= hb.x && e.clientX <= hb.x + hb.n * (hb.slot + hb.gap)) {
       if (hb.single) cycleWeapon(1);
@@ -380,6 +400,7 @@ function setupTouch() {
   atk.addEventListener("pointermove", e => { if (atkP && G.state === "play") { look(e.clientX - atkP.x, e.clientY - atkP.y, 0.0045); atkP = { x: e.clientX, y: e.clientY }; } });
   btn("#t-act", () => { G.input.interact = true; }, () => { G.input.interact = false; });
   btn("#t-light", () => toggleLight());
+  btn("#t-heal", () => quickHeal());
   const qmenu = $("#qmenu");
   const q = (id, fn) => btn(id, () => { qmenu.hidden = true; releaseAll(); fn(); });
   btn("#t-menu", () => { qmenu.hidden = !qmenu.hidden; });
@@ -519,6 +540,7 @@ function boot() {
       tAct.classList.toggle("ready", running && (!!G.target || G.drive || (G.fishing && G.fishing.bite > 0)));
       touchRoot.classList.toggle("placing", !!G.place);
       touchRoot.classList.toggle("moving", !!(G.place && G.place.move));
+      touchRoot.classList.toggle("lowhp", running && G.p.hp < 45 && (G.inv.bandage > 0 || G.inv.medkit > 0));
       touchRoot.classList.toggle("mapopen", !!G.showMap);
       touchRoot.classList.toggle("driving", !!G.drive);
       const hint = G.tip && TIP_BTN[G.tip.icon];

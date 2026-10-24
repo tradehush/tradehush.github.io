@@ -271,7 +271,7 @@ function buildSwamp(rnd) {
 
 function buildDungeon(rnd, id) {
   const T = 40, COLS = 64, ROWS = 64, ox = 720, oy = 720, CELL = 10;
-  World.style = { base: id === "bunker" ? "#2a2a28" : id === "mine" ? "#2a241c" : "#24221e", road: "none", floor: id };
+  World.style = { base: { bunker: "#2a2a28", mine: "#2a241c", sewer: "#1e2420", hospital: "#2e2e2c", cave: "#262018" }[id] || "#24221e", road: "none", floor: { sewer: "bunker", cave: "mine" }[id] || id };
   const floor = new Uint8Array(COLS * ROWS);
   const carve = (x0, y0, x1, y1) => { for (let y = Math.max(1, y0); y <= Math.min(ROWS - 2, y1); y++) for (let x = Math.max(1, x0); x <= Math.min(COLS - 2, x1); x++) floor[y * COLS + x] = 1; };
   // random walk over 6x6 cells, plus side branches
@@ -323,21 +323,36 @@ function buildDungeon(rnd, id) {
   exitTo("forest", start.cx, start.cy - 20, start.cx, start.cy + 50, "ladder", "Подняться наверх");
   const tileXY = (r) => ({ x: ox + (r.x0 + 1 + rnd() * (r.x1 - r.x0 - 1)) * T, y: oy + (r.y0 + 1 + rnd() * (r.y1 - r.y0 - 1)) * T });
   // the prize at the end
-  const prize = { catacombs: ["crossbow", { bolts: 10 }, "Ящик с арбалетом отца Михаила"], mine: ["pistol", { ammo9: 12 }, "Ящик в последнем забое"], bunker: ["shotgun", { shells: 8 }, "Оружейный ящик"] }[id];
+  const prize = { catacombs: ["crossbow", { bolts: 10 }, "Ящик с арбалетом отца Михаила"], mine: ["pistol", { ammo9: 12 }, "Ящик в последнем забое"], bunker: ["shotgun", { shells: 8 }, "Оружейный ящик"],
+    sewer: ["machete", { ammo9: 10, medkit: 1, parts: 2 }, "Тайник Седого"], hospital: ["pistol", { ammo9: 18, medkit: 2, bandage: 3 }, "Сейф главврача"], cave: ["crossbow", { bolts: 14, canned: 2 }, "Рюкзак пропавшего туриста"] }[id];
   wchest(end.cx + 30, end.cy, prize[0], prize[1], prize[2]);
   if (id === "catacombs") inter({ type: "seal", seal: "bone", x: end.cx - 40, y: end.cy, r: 56, label: "Печать: Кость", guard: [["ghoul", 3], ["crawler", 2]] });
   World.endRoom = end;
   const mid = list[Math.floor(list.length / 2)];
   inter({ type: "note", key: id, x: mid.cx, y: mid.cy, r: 40 });
+  // the generator powers every lamp down here; it sits somewhere in the middle, never next to the ladder
+  const genRoom = list[Math.max(1, Math.floor(list.length * (0.3 + rnd() * 0.3)))];
+  if (genRoom !== end) {
+    const gx = genRoom.cx + (genRoom === mid ? 70 : -30), gy = genRoom.cy - 50;
+    World.furn.push({ x: gx - 26, y: gy - 17, w: 52, h: 34, kind: "generator" });
+    inter({ type: "generator", x: gx, y: gy + 40, r: 46 });
+  }
+  World.lights.push({ x: start.cx + 50, y: start.cy - 30, r: 170, col: id === "bunker" ? "255,170,90" : "255,170,90", flick: 0.12, torch: true });
   for (const r of list) {
     if (r === start) continue;
     if (rnd() < 0.7) { const p = tileXY(r); World.furn.push({ x: p.x - 15, y: p.y - 15, w: 30, h: 30, kind: "crate" }); inter({ type: "crate", x: p.x, y: p.y, r: 38, full: true }); }
-    if (rnd() < 0.55 || r === end) World.lights.push({ x: r.cx + (rnd() - 0.5) * 60, y: r.cy + (rnd() - 0.5) * 60, r: 200, col: id === "bunker" ? "200,220,255" : "255,170,90", flick: id === "bunker" ? 0.5 : 0.12, torch: id !== "bunker" });
+    // a few old torches still burn; electric lamps in every room wait for the generator
+    if (id !== "bunker" && rnd() < 0.3) World.lights.push({ x: r.cx + (rnd() - 0.5) * 60, y: r.cy + (rnd() - 0.5) * 60, r: 180, col: "255,170,90", flick: 0.12, torch: true });
+    const tube = id === "bunker" || id === "hospital" || id === "sewer";
+    World.lights.push({ x: r.cx + (rnd() - 0.5) * 40, y: r.cy + (rnd() - 0.5) * 40, r: 260, col: tube ? "200,220,255" : "255,205,150", flick: tube ? 0.3 : 0.05, sw: "gen" });
     // decor by dungeon type
     for (let i = 0; i < 3; i++) {
       const p = tileXY(r);
       if (dist2(p.x, p.y, r.cx, r.cy) < 50 * 50) continue;
       if (id === "catacombs") { if (rnd() < 0.5) { World.furn.push({ x: p.x - 20, y: p.y - 40, w: 40, h: 80, kind: "coffin" }); } else decor("bones", p.x, p.y, rnd() * 6); }
+      else if (id === "hospital") { const k = rnd(); if (k < 0.45) World.furn.push({ x: p.x - 18, y: p.y - 32, w: 36, h: 64, kind: "gurney" }); else if (k < 0.75) World.furn.push({ x: p.x - 30, y: p.y - 12, w: 60, h: 24, kind: "cabinet" }); else decor("doll", p.x, p.y, rnd() * 6); }
+      else if (id === "sewer") { if (rnd() < 0.5) World.furn.push({ x: p.x - 16, y: p.y - 16, w: 32, h: 32, kind: "barrel" }); else decor("bones", p.x, p.y, rnd() * 6, 0.7); }
+      else if (id === "cave") { if (rnd() < 0.6) World.stones.push({ x: p.x, y: p.y, r: 10 + rnd() * 10, type: "stone", spike: true }); else decor("bones", p.x, p.y, rnd() * 6); }
       else if (id === "mine") { if (rnd() < 0.4) World.furn.push({ x: p.x - 18, y: p.y - 26, w: 36, h: 52, kind: "cart" }); else decor("bones", p.x, p.y, rnd() * 6, 0.8); }
       else { if (rnd() < 0.5) World.furn.push({ x: p.x - 16, y: p.y - 16, w: 32, h: 32, kind: "barrel" }); else World.furn.push({ x: p.x - 40, y: p.y - 14, w: 80, h: 28, kind: "shelf" }); }
     }
@@ -358,6 +373,18 @@ function buildDungeon(rnd, id) {
     }
   });
   for (const r of list) if (r !== start && rnd() < 0.65) { const p = tileXY(r); World.hazards.push({ kind: "bear", x: p.x, y: p.y, armed: true }); }
+  // sewer: dirty water in the corridors, poison gas in some rooms
+  if (id === "sewer") {
+    corridors.forEach(c => { for (let x = Math.min(c.ax, c.bx); x <= Math.max(c.ax, c.bx); x += 2) if (rnd() < 0.7) World.swamp.push({ x: ox + (x + 1) * T, y: oy + (c.ay + 1) * T, r: 34 }); });
+    for (const r of list) if (r !== start && r !== end && rnd() < 0.45) World.hazards.push({ kind: "gas", x: r.cx + (rnd() - 0.5) * 60, y: r.cy + (rnd() - 0.5) * 60, r: 90 + rnd() * 50 });
+  }
+  // hospital: some rooms are full of something you should not breathe
+  if (id === "hospital") for (const r of list) if (r !== start && r !== end && rnd() < 0.3) World.hazards.push({ kind: "gas", x: r.cx, y: r.cy, r: 80 + rnd() * 40, mad: true });
+  // cave: the ceiling comes down where it is cracked
+  if (id === "cave") {
+    corridors.forEach(c => { if (rnd() < 0.8) { const x = Math.floor((c.ax + c.bx) / 2), y = c.ay; World.hazards.push({ kind: "rocks", x: ox + (x + 1) * T, y: oy + (y + 1) * T, r: 60, armed: true, t: 0 }); } });
+    for (const r of list) if (r !== start && rnd() < 0.4) { const p = tileXY(r); World.hazards.push({ kind: "rocks", x: p.x, y: p.y, r: 70, armed: true, t: 0 }); }
+  }
 }
 
 // --- shared scatter helpers ---------------------------------------------------------
@@ -514,6 +541,21 @@ function buildPOIs(rnd) {
     [[12400, 8200], [15000, 6300], [18900, 4150]],
     [[18900, 4150], [19500, 7000], [18450, 10900], [18450, 11280]],
   );
+  // three more ways down: a sewer hatch by the road, the village hospital's basement, a cave in the north-east
+  exitTo("sewer", 13300, 12420, 13300, 12520, "hatch", "Спуститься в коллектор");
+  World.keep.push({ x: 13300, y: 12420, r: 160 });
+  const hp = addHouse({ id: "hospital", name: "Сельская больница", x: 7900, y: 10900, w: 460, h: 300, door: "s", floor: "#4a4a44", roof: "#5a5a54",
+    parts: [[300, 0, 300, 300, [120, 120 + DOOR]]], style: "doctor" });
+  furn(hp, 20, 20, 36, 64, "bed"); furn(hp, 80, 20, 36, 64, "bed"); furn(hp, 140, 20, 36, 64, "bed");
+  furn(hp, 320, 20, 120, 30, "shelf"); crate(hp, 20, 240); crate(hp, 400, 240);
+  exitTo("hospital", hp.x + 380, hp.y + 170, hp.x + 380, hp.y + 240, "bunker", "Спуститься в подвал");
+  World.regions.push({ name: "Сельская больница", x: 8130, y: 11050, r: 600 });
+  exitTo("cave", 20600, 2300, 20600, 2420, "mine", "Войти в пещеру");
+  for (let i = 0; i < 8; i++) { const a = Math.PI * 0.15 + i * 0.32; World.stones.push({ x: 20600 + Math.cos(a + Math.PI) * 90, y: 2300 + Math.sin(a + Math.PI) * 90, r: 26, type: "stone" }); }
+  World.keep.push({ x: 20600, y: 2350, r: 200 });
+  World.regions.push({ name: "Медвежья пещера", x: 20600, y: 2300, r: 600 });
+  World.roads.push([[18900, 4150], [19800, 3200], [20550, 2480]]);
+
   // abandoned houses along the roads
   const along = [];
   for (const r of World.roads) for (let i = 0; i < r.length - 1; i++) along.push([r[i], r[i + 1]]);
@@ -528,6 +570,123 @@ function buildPOIs(rnd) {
     if (World.swamp.some(sw => dist2(x + 120, y + 90, sw.x, sw.y) < (sw.r + 260) ** 2)) continue;
     if (distToRoad(x + 120, y + 90) < 150) continue;
     cabin(rnd, x, y, "Заброшенный дом", "cabin" + n); n++;
+  }
+}
+
+// --- house interiors: every house gets its own wallpaper, pictures, a lamp with a switch and a couple of things to use ---
+
+const HOUSE_STYLES = ["cozy", "hunter", "grandma", "worker", "child", "doctor", "musician"];
+const PAPERS = ["#6a4a3a", "#4a5a44", "#5a4a5e", "#6a5e44", "#44525e", "#704a44", "#5e5a50", "#3e4a3a"];
+function wallSpot(h, w, d, rnd, tries = 40) {
+  // a free floor spot against a wall, away from the door, not crossing partitions or other furniture
+  for (let t = 0; t < tries; t++) {
+    const side = Math.floor(rnd() * 4), m = WT / 2 + 4;
+    let x, y, fw = w, fh = d;
+    if (side === 0) { x = h.x + m + rnd() * (h.w - 2 * m - w); y = h.y + m; }
+    else if (side === 1) { x = h.x + m + rnd() * (h.w - 2 * m - w); y = h.y + h.h - m - d; }
+    else { fw = d; fh = w; x = side === 2 ? h.x + m : h.x + h.w - m - d; y = h.y + m + rnd() * (h.h - 2 * m - w); }
+    if (fw > h.w - 2 * m || fh > h.h - 2 * m) continue;
+    const R = { x, y, w: fw, h: fh };
+    if (dist2(x + fw / 2, y + fh / 2, h.doorPos.x, h.doorPos.y) < 95 * 95) continue;
+    const hit = o => !(R.x + R.w + 8 <= o.x || R.x - 8 >= o.x + o.w || R.y + R.h + 8 <= o.y || R.y - 8 >= o.y + o.h);
+    if (World.furn.some(f => f.house === h.id && hit(f)) || World.furn.some(f => !f.house && hit(f))) continue;
+    if (h.walls.some(wl => !(R.x + R.w <= wl.x || R.x >= wl.x + wl.w || R.y + R.h <= wl.y || R.y >= wl.y + wl.h))) continue;
+    if (World.inter.some(o => o.x > R.x - 30 && o.x < R.x + R.w + 30 && o.y > R.y - 30 && o.y < R.y + R.h + 30)) continue;
+    return { x, y, w: fw, h: fh, side: ["n", "s", "w", "e"][side] };
+  }
+  return null;
+}
+function wallDecor(h, k, rnd, z, w, extra = {}) {
+  // something hung on an inside wall: picks a wall segment that is long enough and not the door
+  for (let t = 0; t < 20; t++) {
+    const side = ["n", "s", "w", "e"][Math.floor(rnd() * 4)];
+    const horiz = side === "n" || side === "s", L = horiz ? h.w : h.h;
+    if (L < w + 60) continue;
+    const off = 30 + rnd() * (L - w - 60);
+    const x = horiz ? h.x + off + w / 2 : side === "w" ? h.x + WT / 2 + 1 : h.x + h.w - WT / 2 - 1;
+    const y = horiz ? (side === "n" ? h.y + WT / 2 + 1 : h.y + h.h - WT / 2 - 1) : h.y + off + w / 2;
+    if (side === h.door && Math.abs(off + w / 2 - L / 2) < DOOR / 2 + w / 2 + 20) continue;
+    if (World.wdecor.some(o => o.house === h.id && o.side === side && Math.hypot(o.x - x, o.y - y) < (o.w + w) / 2 + 20 && Math.abs(o.z - z) < 40)) continue;
+    const o = Object.assign({ k, x, y, z, w, side, house: h.id }, extra);
+    World.wdecor.push(o);
+    return o;
+  }
+  return null;
+}
+function decorateHouse(h, rnd) {
+  if (h.ruin || h.noDecor) return;
+  h.style = h.style || HOUSE_STYLES[Math.floor(rnd() * HOUSE_STYLES.length)];
+  h.paper = PAPERS[Math.floor(rnd() * PAPERS.length)];
+  h.paper2 = rnd() < 0.5 ? "#2e2218" : "#3a3a34";
+  // a ceiling lamp and its switch by the door
+  const lamp = { x: h.x + h.w / 2, y: h.y + h.h / 2, r: Math.max(h.w, h.h) * 0.7 + 60, col: "255,205,150", flick: 0.03, sw: h.id };
+  if (!World.lights.some(l => dist2(l.x, l.y, lamp.x, lamp.y) < 120 * 120)) World.lights.push(lamp);
+  else World.lights.filter(l => insideHouse(l.x, l.y) === h).forEach(l => { l.sw = h.id; });
+  const d = h.doorPos, inw = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[h.door], along = h.door === "s" || h.door === "n";
+  const sx = d.x + inw[0] * (WT / 2 + 2) + (along ? DOOR / 2 + 18 : 0), sy = d.y + inw[1] * (WT / 2 + 2) + (along ? 0 : DOOR / 2 + 18);
+  inter({ type: "switch", sw: h.id, x: sx + inw[0] * 20, y: sy + inw[1] * 20, r: 40, house: h.id });
+  World.wdecor.push({ k: "switch", x: sx, y: sy, z: 62, w: 8, side: h.door, house: h.id });
+  // pictures, a clock, a mirror
+  const nPics = 1 + Math.floor(rnd() * 3);
+  for (let i = 0; i < nPics; i++) wallDecor(h, "picture", rnd, 70 + rnd() * 20, 26 + rnd() * 22, { pic: Math.floor(rnd() * 6) });
+  if (rnd() < 0.55) wallDecor(h, "clock", rnd, 96, 18);
+  if (rnd() < 0.4) { const m = wallDecor(h, "mirror", rnd, 72, 24); if (m) inter({ type: "mirror", x: m.x + (m.side === "w" ? 30 : m.side === "e" ? -30 : 0), y: m.y + (m.side === "n" ? 30 : m.side === "s" ? -30 : 0), r: 36, house: h.id }); }
+  if (h.style === "hunter") wallDecor(h, "antlers", rnd, 100, 40);
+  if (h.style === "child") wallDecor(h, "drawing", rnd, 60, 20, { pic: Math.floor(rnd() * 3) });
+  // a rug on the floor
+  if (rnd() < 0.75) World.wdecor.push({ k: "rug", x: h.x + h.w * (0.35 + rnd() * 0.3), y: h.y + h.h * (0.35 + rnd() * 0.3), z: 0, w: Math.min(h.w, h.h) * 0.45, side: "f", house: h.id, col: ["#6a2a22", "#2a3a5a", "#5a4a22", "#3a5a3a"][Math.floor(rnd() * 4)] });
+  // furniture that does something; each style has its favourites
+  const add = (kind, w, dd, it) => { const s = wallSpot(h, w, dd, rnd); if (!s) return null; const f = furn(h, s.x - h.x, s.y - h.y, s.w, s.h, kind, { face: s.side }); const fv = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[s.side], dep = s.side === "n" || s.side === "s" ? s.h : s.w; if (it) inter(Object.assign({ fx: s.x + s.w / 2 + fv[0] * (dep / 2 + 6), fy: s.y + s.h / 2 + fv[1] * (dep / 2 + 6), x: s.x + s.w / 2 + (s.side === "w" ? s.w / 2 + 22 : s.side === "e" ? -s.w / 2 - 22 : 0), y: s.y + s.h / 2 + (s.side === "n" ? s.h / 2 + 22 : s.side === "s" ? -s.h / 2 - 22 : 0), r: 42, house: h.id }, it)); return f; };
+  const fav = { cozy: ["fireplace", "sofa", "radio"], hunter: ["fireplace", "fridge", "radio"], grandma: ["sofa", "bookcase", "fridge"], worker: ["radio", "fridge", "tv"], child: ["tv", "bookcase", "sofa"], doctor: ["medcab", "bookcase", "radio"], musician: ["piano", "sofa", "bookcase"] }[h.style];
+  const big = h.w * h.h > 70000 ? 3 : 2;
+  for (const k of fav.slice(0, big)) {
+    if (k === "fireplace") add("fireplace", 64, 30, { type: "fireplace" });
+    else if (k === "sofa") add("sofa", 80, 34, { type: "sofa" });
+    else if (k === "radio") add("radio", 34, 24, { type: "radio" });
+    else if (k === "fridge") add("fridge", 34, 32, { type: "fridge", full: true });
+    else if (k === "bookcase") add("bookcase", 62, 22, { type: "bookcase" });
+    else if (k === "tv") add("tv", 44, 28, { type: "tv" });
+    else if (k === "piano") add("piano", 76, 30, { type: "piano" });
+    else if (k === "medcab") add("medcab", 40, 20, { type: "medcab", full: true });
+  }
+  if (rnd() < 0.6) add("plant", 18, 18);
+  if (h.style === "child" && rnd() < 0.7) decor("doll", h.x + h.w * (0.2 + rnd() * 0.6), h.y + h.h * (0.2 + rnd() * 0.6), rnd() * 6);
+}
+function decorateHouses(rnd) { for (const h of World.houses) decorateHouse(h, rnd); }
+
+// rivers wind across the map (bridges where roads cross) and a few more lakes, all good for fishing
+function buildWaters(rnd) {
+  const blocked = (x, y, pad) => insideHouse(x, y, pad) || World.keep.some(k => dist2(x, y, k.x, k.y) < (k.r + pad) ** 2) || World.exits.some(e => dist2(x, y, e.x, e.y) < (pad + 120) ** 2) || (World.carStart && dist2(x, y, World.carStart.x, World.carStart.y) < 300 * 300);
+  const river = (pts, w) => {
+    // densify the control points into a wiggly line, then lay water discs along it
+    const line = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[i + 1], L = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / L, ny = (bx - ax) / L, ph = rnd() * 6;
+      for (let t = 0; t < L; t += 70) { const k = t / L, wob = Math.sin(k * Math.PI * 3 + ph) * 180 * Math.sin(k * Math.PI); line.push([ax + (bx - ax) * k + nx * wob, ay + (by - ay) * k + ny * wob]); }
+    }
+    let gap = false;
+    for (let i = 0; i < line.length; i++) {
+      const [x, y] = line[i], [px, py] = line[Math.max(0, i - 1)], [qx, qy] = line[Math.min(line.length - 1, i + 1)];
+      if (x < 80 || y < 80 || x > World.W - 80 || y > World.H - 80) continue;
+      const nearRoad = distToRoad(x, y) < w + 70;
+      if (nearRoad) { if (!gap) decor("bridge", x, y, Math.atan2(qy - py, qx - px) + Math.PI / 2, (w * 2 + 120) / 260); gap = true; continue; }
+      gap = false;
+      if (blocked(x, y, w + 120)) continue;
+      World.swamp.push({ x, y, r: w + Math.sin(i * 0.7) * 18, lake: true, river: true });
+    }
+  };
+  river([[6800, 0], [7600, 5200], [6400, 9800], [7900, 15000], [6900, 19500], [8200, 24000]], 95);
+  river([[24000, 15500], [20500, 16800], [16000, 15900], [13000, 19400], [9000, 21000]], 85);
+  river([[13200, 0], [12300, 2600], [12000, 3800]], 75);
+  // lakes
+  for (const [cx, cy, R] of [[4300, 19800, 650], [17200, 19300, 560], [21200, 6800, 600]]) {
+    let n = 0;
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, d = rnd() * R, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.65;
+      if (blocked(x, y, 260) || distToRoad(x, y) < 280) continue;
+      World.swamp.push({ x, y, r: 180 + rnd() * 140, lake: true }); n++;
+    }
+    if (n > 4) { decor("pier", cx, cy + R * 0.65 + 120, 0); World.regions.push({ name: "Лесное озеро", x: cx, y: cy, r: R + 500 }); }
   }
 }
 
@@ -561,8 +720,11 @@ function buildBigWorld(rnd) {
     { name: "Гнилые топи", x: 3500, y: 3500, r: 2500, spawn: MAPS.swamp.spawn, fog: 1.6, dead: 0.65 },
   );
   buildPOIs(rnd);
+  decorateHouses(rnd);
+  buildWaters(rnd);
   World.style = { base: "#1c2416", road: "dirt" };
   World.start = { x: 9430, y: 12800 };
+  buildSwampGrid();
   // nature: forests where the noise says so, open fields elsewhere
   const forest = valueNoise(77, 2600), detail = valueNoise(78, 700);
   const okSpot = (x, y, near) => {
@@ -572,7 +734,7 @@ function buildBigWorld(rnd) {
     for (const k of World.keep) if (dist2(x, y, k.x, k.y) < k.r * k.r) return false;
     for (const e of World.exits) if (dist2(x, y, e.x, e.y) < 130 * 130) return false;
     for (const c of World.clear) if (x > c.x0 && x < c.x1 && y > c.y0 && y < c.y1 && rnd() < 0.85) return false;
-    for (const sw of World.swamp) if (dist2(x, y, sw.x, sw.y) < (sw.r + 10) ** 2) return false;
+    for (const sw of swampNear(x, y)) if (dist2(x, y, sw.x, sw.y) < (sw.r + 10) ** 2) return false;
     for (const q of gridQuery(x, y, near)) if (dist2(x, y, q.x, q.y) < (near + q.r) ** 2 * 0.5) return false;
     return true;
   };
@@ -594,23 +756,24 @@ function buildBigWorld(rnd) {
     if (distToRoad(x, y) < 50 || insideHouse(x, y, 60)) continue;
     addRes({ type: "scrap", car: true, x, y, r: 30, left: 6, max: 6, regrow: 0, block: true, sh: rnd() }); i++;
   }
-  for (let i = 0; i < 14000; i++) World.props.push({ x: rnd() * World.W, y: rnd() * World.H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
+  for (let i = 0; i < 30000; i++) World.props.push({ x: rnd() * World.W, y: rnd() * World.H, k: rnd() < 0.85 ? 0 : 1, s: rnd() });
   World.horror = { effigy: 120, hanged: 30, bones: 70, blood: 120, doll: 14, totem: 18 };
   scatterHorror(rnd, World.horror);
 }
 
 function generateWorld(seed, mapId = "forest") {
-  const base = { forest: 0, camp: 101, swamp: 202, catacombs: 303, mine: 404, bunker: 505 }[mapId] || 0;
+  const base = { forest: 0, camp: 101, swamp: 202, catacombs: 303, mine: 404, bunker: 505, sewer: 606, hospital: 707, cave: 808 }[mapId] || 0;
   const rnd = mulberry32(seed + base);
   const big = mapId === "forest";
   Object.assign(World, { map: mapId, indoor: MAPS[mapId].kind === "dungeon", W: big ? 24000 : 4000, H: big ? 24000 : 4000,
     houses: [], walls: [], furn: [], res: [], stones: [], swamp: [], props: [], inter: [], lights: [],
-    roads: [], exits: [], decor: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null, regions: [], carStart: null, composing: false });
+    roads: [], exits: [], decor: [], sgrid: null, wdecor: [], blood: [], hazards: [], keep: [], clear: [], rooms: [], dungeon: null, endRoom: null, altar: null, regions: [], carStart: null, composing: false });
   World.gw = Math.ceil(World.W / World.gcell); World.gh = Math.ceil(World.H / World.gcell);
   World.grid = Array.from({ length: World.gw * World.gh }, () => []);
   if (big) buildBigWorld(rnd);
   else buildDungeon(rnd, mapId);
   // final spatial grids
+  buildSwampGrid();
   World.grid = Array.from({ length: World.gw * World.gh }, () => []);
   World.res.forEach(gridAdd);
   World.stones.forEach(gridAdd);
@@ -688,8 +851,21 @@ function collide(e) {
   e.x = clamp(e.x, 20, World.W - 20); e.y = clamp(e.y, 20, World.H - 20);
 }
 
+function buildSwampGrid() {
+  const c = 600, nw = Math.ceil(World.W / c), nh = Math.ceil(World.H / c), g = Array.from({ length: nw * nh }, () => []);
+  for (const s of World.swamp) {
+    const R = s.r + 100, x0 = clamp(Math.floor((s.x - R) / c), 0, nw - 1), x1 = clamp(Math.floor((s.x + R) / c), 0, nw - 1), y0 = clamp(Math.floor((s.y - R) / c), 0, nh - 1), y1 = clamp(Math.floor((s.y + R) / c), 0, nh - 1);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y * nw + x].push(s);
+  }
+  World.sgrid = { c, nw, nh, g };
+}
+function swampNear(x, y) {
+  const S = World.sgrid; if (!S) return World.swamp;
+  const gx = Math.floor(x / S.c), gy = Math.floor(y / S.c);
+  return gx < 0 || gy < 0 || gx >= S.nw || gy >= S.nh ? [] : S.g[gy * S.nw + gx];
+}
 function inSwamp(x, y) {
-  for (const s of World.swamp) if (dist2(x, y, s.x, s.y) < s.r * s.r * 0.8) return true;
+  for (const s of swampNear(x, y)) if (dist2(x, y, s.x, s.y) < s.r * s.r * 0.8) return true;
   return false;
 }
 

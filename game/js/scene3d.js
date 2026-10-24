@@ -3,7 +3,7 @@
 // World x/y map to three.js x/z; y is up. Units are the same pixels the simulation uses (≈40 per metre).
 
 const EYE = 62, WALL_H = 124, DOOR_H = 92;
-const FURN_H = { wardrobe: 90, carlift: 20, hay: 40, logs: 40, crate: 30, bench: 36, table: 34, bed: 24, shelf: 84, altar: 40, pew: 20, board: 0, desk: 28, cauldron: 32, car: 52, altarstone: 34, wchest: 30, stage: 30, coffin: 26, cart: 34, barrel: 40 };
+const FURN_H = { gurney: 30, cabinet: 70, fireplace: 70, sofa: 30, radio: 40, fridge: 84, bookcase: 92, tv: 44, piano: 56, medcab: 0, plant: 30, generator: 40, wardrobe: 90, carlift: 20, hay: 40, logs: 40, crate: 30, bench: 36, table: 34, bed: 24, shelf: 84, altar: 40, pew: 20, board: 0, desk: 28, cauldron: 32, car: 52, altarstone: 34, wchest: 30, stage: 30, coffin: 26, cart: 34, barrel: 40 };
 
 const V = {
   ready: false, mobile: false, shadows: true, renderer: null, scene: null, camera: null,
@@ -296,6 +296,70 @@ function canvasTex(size, draw, repeat = false) {
   return t;
 }
 
+// --- house interiors: wallpaper, pictures, clocks, mirrors, rugs --------------------------
+
+function buildInteriors(s, rnd) {
+  if (!World.wdecor || World.indoor) return;
+  if (!V.tex.paper) {
+    V.tex.paper = canvasTex(128, (g, S) => {
+      g.fillStyle = "#d8d0c0"; g.fillRect(0, 0, S, S);
+      for (let i = 0; i < 4; i++) { g.fillStyle = "rgba(255,255,255,0.18)"; g.fillRect(i * 32 + 4, 0, 10, S); }
+      g.fillStyle = "rgba(90,60,40,0.25)";
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.beginPath(); g.ellipse(x * 32 + 16, y * 32 + (x % 2) * 16 + 8, 4, 6, 0, 0, 7); g.fill(); }
+      for (let i = 0; i < 300; i++) { g.fillStyle = `rgba(60,40,20,${Math.random() * 0.08})`; g.fillRect(Math.random() * S, Math.random() * S, 3, 3); }
+    }, true);
+    // six paintings and three children's drawings, all drawn here
+    const P = (draw) => canvasTex(128, draw);
+    V.tex.pics = [
+      P((g, S) => { const gr = g.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, "#8ab0d0"); gr.addColorStop(0.6, "#e8d8a8"); gr.addColorStop(0.61, "#3a5a2a"); gr.addColorStop(1, "#2a4020"); g.fillStyle = gr; g.fillRect(0, 0, S, S); g.fillStyle = "#1e3018"; for (let i = 0; i < 9; i++) { g.beginPath(); g.moveTo(i * 15, 80); g.lineTo(i * 15 + 8, 40 + (i % 3) * 8); g.lineTo(i * 15 + 16, 80); g.fill(); } }),
+      P((g, S) => { g.fillStyle = "#2a2018"; g.fillRect(0, 0, S, S); g.fillStyle = "#3a2a20"; g.fillRect(30, 70, 68, 58); g.fillStyle = "#c8a888"; g.beginPath(); g.ellipse(64, 50, 22, 28, 0, 0, 7); g.fill(); g.fillStyle = "#2a1a10"; g.fillRect(52, 46, 6, 4); g.fillRect(70, 46, 6, 4); g.fillRect(58, 66, 12, 2); g.fillStyle = "#4a3020"; g.beginPath(); g.ellipse(64, 30, 26, 14, 0, Math.PI, 0); g.fill(); }),
+      P((g, S) => { g.fillStyle = "#3a2e24"; g.fillRect(0, 0, S, S); g.fillStyle = "#6a5a40"; g.fillRect(44, 80, 40, 40); const c = ["#c83a3a", "#e8c040", "#e8e0d0", "#a040a0"]; for (let i = 0; i < 9; i++) { g.fillStyle = c[i % 4]; g.beginPath(); g.arc(40 + (i % 3) * 24 + (i * 7 % 9), 40 + Math.floor(i / 3) * 14, 9, 0, 7); g.fill(); } }),
+      P((g, S) => { const gr = g.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, "#c8d8e0"); gr.addColorStop(0.5, "#6a8aa0"); gr.addColorStop(1, "#2a4a6a"); g.fillStyle = gr; g.fillRect(0, 0, S, S); g.fillStyle = "#f0e8d0"; g.beginPath(); g.moveTo(50, 60); g.lineTo(64, 20); g.lineTo(64, 60); g.fill(); g.fillStyle = "#5a3a20"; g.fillRect(40, 60, 50, 8); }),
+      P((g, S) => { g.fillStyle = "#1a1612"; g.fillRect(0, 0, S, S); g.fillStyle = "#9a9080"; g.beginPath(); g.ellipse(64, 60, 26, 34, 0, 0, 7); g.fill(); g.fillStyle = "#000"; g.beginPath(); g.ellipse(54, 54, 6, 8, 0, 0, 7); g.ellipse(74, 54, 6, 8, 0, 0, 7); g.fill(); g.fillStyle = "#c01010"; g.fillRect(52, 54, 3, 3); g.fillRect(72, 54, 3, 3); g.fillStyle = "#000"; g.fillRect(52, 78, 24, 4); }),
+      P((g, S) => { g.fillStyle = "#4a3a2a"; g.fillRect(0, 0, S, S); for (let i = 0; i < 14; i++) { g.fillStyle = ["#a04030", "#d0a040", "#305070", "#e0d8c0"][i % 4]; g.globalAlpha = 0.7; g.fillRect(Math.random() * 100, Math.random() * 100, 10 + Math.random() * 40, 10 + Math.random() * 40); } g.globalAlpha = 1; }),
+    ];
+    V.tex.drawings = [0, 1, 2].map(k => P((g, S) => { g.fillStyle = "#f0ece0"; g.fillRect(0, 0, S, S); g.lineWidth = 4; g.strokeStyle = ["#2050c0", "#c02020", "#208030"][k]; g.beginPath(); g.arc(40, 40, 16, 0, 7); g.stroke(); g.beginPath(); g.moveTo(40, 56); g.lineTo(40, 100); g.moveTo(20, 70); g.lineTo(60, 70); g.moveTo(40, 100); g.lineTo(25, 120); g.moveTo(40, 100); g.lineTo(55, 120); g.stroke(); g.strokeStyle = "#111"; g.beginPath(); g.moveTo(90, 30); g.lineTo(90, 110); g.moveTo(80, 40); g.lineTo(100, 40); g.stroke(); g.fillStyle = "#111"; g.fillRect(86, 20, 8, 10); if (k === 2) { g.fillStyle = "#c02020"; g.fillRect(84, 24, 3, 3); g.fillRect(92, 24, 3, 3); } }));
+    V.tex.rug = canvasTex(128, (g, S) => { g.fillStyle = "#c8c0b0"; g.fillRect(0, 0, S, S); g.strokeStyle = "#6a6050"; g.lineWidth = 6; g.strokeRect(10, 10, S - 20, S - 20); g.lineWidth = 2; g.strokeRect(22, 22, S - 44, S - 44); for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(64, 30 + i * 4); g.lineTo(98 - i * 4, 64); g.lineTo(64, 98 - i * 4); g.lineTo(30 + i * 4, 64); g.closePath(); g.stroke(); } });
+  }
+  // wallpaper on the inner faces and a dark skirting below
+  const paper = [];
+  const inset = WT / 2 + 0.7;
+  for (const h of World.houses) {
+    if (h.ruin || !h.paper) continue;
+    for (const R of h.walls) {
+      const horiz = R.w >= R.h, mid = horiz ? R.y + R.h / 2 : R.x + R.w / 2;
+      const sides = horiz ? (Math.abs(mid - h.y) < 2 ? [1] : Math.abs(mid - h.y - h.h) < 2 ? [-1] : [1, -1]) : (Math.abs(mid - h.x) < 2 ? [1] : Math.abs(mid - h.x - h.w) < 2 ? [-1] : [1, -1]);
+      for (const sd of sides) {
+        const len = horiz ? R.w : R.h, cxl = horiz ? R.x + R.w / 2 : mid + sd * inset, czl = horiz ? mid + sd * inset : R.y + R.h / 2;
+        paper.push(box(cxl, (WALL_H - 2) / 2 + 1, czl, horiz ? len : 1, WALL_H - 2, horiz ? 1 : len, h.paper, 0.04));
+        paper.push(box(horiz ? cxl : cxl + sd * 0.8, 16, horiz ? czl + sd * 0.8 : czl, horiz ? len : 1.6, 32, horiz ? 1.6 : len, h.paper2, 0.1));
+        paper.push(box(horiz ? cxl : cxl + sd * 0.9, 33, horiz ? czl + sd * 0.9 : czl, horiz ? len : 2.2, 3, horiz ? 2.2 : len, "#2a1e14", 0));
+      }
+    }
+  }
+  if (paper.length) { const m = new THREE.Mesh(mergeParts(paper), lam(0xffffff, { vertexColors: true, map: V.tex.paper })); m.receiveShadow = true; s.add(m); }
+  // things on the walls; ry turns a flat thing to face into the room
+  const RY = { n: 0, s: Math.PI, w: Math.PI / 2, e: -Math.PI / 2 }, OUT = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] };
+  const frames = [];
+  for (const o of World.wdecor) {
+    if (o.k === "rug") {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(o.w * 1.4, o.w), lam(o.col, { map: V.tex.rug }));
+      m.rotation.x = -Math.PI / 2; m.position.set(o.x, 1.1, o.y); m.receiveShadow = true; s.add(m); continue;
+    }
+    const out = OUT[o.side]; if (!out) continue;
+    const at = (d) => [o.x + out[0] * d, o.y + out[1] * d];
+    const flat = (w, h, mat, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); const [x, y] = at(d); m.position.set(x, o.z, y); m.rotation.y = RY[o.side]; s.add(m); return m; };
+    const fbox = (w, h, d, c, off, dy = 0) => { const [x, y] = at(off); const horiz = o.side === "n" || o.side === "s"; frames.push(box(x, o.z + dy, y, horiz ? w : d, h, horiz ? d : w, c, 0.1)); };
+    if (o.k === "picture") { const H = o.w * 1.25; fbox(o.w + 6, H + 6, 2, "#5a3e22", 1); flat(o.w, H, lam(0xffffff, { map: V.tex.pics[o.pic % V.tex.pics.length] }), 2.2); }
+    else if (o.k === "drawing") { flat(o.w, o.w * 1.3, lam(0xffffff, { map: V.tex.drawings[o.pic % 3] }), 1.2); }
+    else if (o.k === "mirror") { fbox(o.w + 6, o.w * 1.6 + 6, 2, "#6a5030", 1); flat(o.w, o.w * 1.6, new THREE.MeshPhongMaterial({ color: 0x9aa4a8, shininess: 140, specular: 0xffffff }), 2.2); }
+    else if (o.k === "clock") { const [x, y] = at(1.5); const g = new THREE.CylinderGeometry(o.w / 2, o.w / 2, 3, 16); g.rotateX(Math.PI / 2); g.rotateY(RY[o.side]); g.translate(x, o.z, y); frames.push({ geo: g, c: "#e8e0c8" }); fbox(1.2, o.w * 0.35, 1, "#111", 3.2, o.w * 0.12); fbox(o.w * 0.3, 1.2, 1, "#111", 3.2, 0); fbox(o.w + 4, 3, 4, "#4a3420", 1.5, o.w / 2); }
+    else if (o.k === "switch") { fbox(6, 9, 2, "#d8d0c0", 1); fbox(2, 3, 2, "#444", 2); }
+    else if (o.k === "antlers") { fbox(14, 12, 4, "#4a3420", 2); for (const sd of [-1, 1]) { const [x, y] = at(6); const g = new THREE.CylinderGeometry(1.2, 2, 30, 5); g.rotateZ(sd * 0.8); g.rotateY(RY[o.side]); g.translate(x + (o.side === "n" || o.side === "s" ? sd * 10 : 0), o.z + 10, y + (o.side === "w" || o.side === "e" ? sd * 10 : 0)); frames.push({ geo: g, c: "#d8c8a8" }); } }
+  }
+  if (frames.length) { const m = new THREE.Mesh(mergeParts(frames), lam(0xffffff, { vertexColors: true })); s.add(m); }
+}
+
 // --- static world --------------------------------------------------------------------
 
 function disposeTree(root) {
@@ -336,7 +400,7 @@ function buildLamps() {
       if (World.indoor) {
         // fluorescent tube on the ceiling
         const tube = new THREE.Mesh(new THREE.BoxGeometry(60, 3, 6), glowMat(0xdfe8ff)); tube.position.y = -4; g.add(tube);
-        g.userData.tube = tube;
+        g.userData.tube = tube; g.userData.l = l;
         g.position.set(l.x, WALL_H, l.y);
       } else return null;
     } else {
@@ -344,6 +408,9 @@ function buildLamps() {
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(4, 10, 8), glowMat(0xffd090)); bulb.position.y = -32; g.add(bulb);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: V.tex.glow, color: 0xffb060, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.6 }));
       halo.scale.setScalar(40); halo.position.y = -32; g.add(halo);
+      // a lampshade on house lamps
+      if (l.sw) { const shade = new THREE.Mesh(new THREE.ConeGeometry(14, 12, 12, 1, true), lam(0xc8a878, { side: THREE.DoubleSide })); shade.position.y = -26; g.add(shade); }
+      g.userData.bulb = bulb; g.userData.halo = halo; g.userData.l = l;
       g.position.set(l.x, WALL_H, l.y);
     }
     V.world.add(g);
@@ -392,6 +459,7 @@ function buildStatic() {
         const px = (D.ox + x * D.T) * k, py = (D.oy + y * D.T) * k, q = D.T * k, v = 0.75 + rnd() * 0.4;
         if (st.floor === "mine") { g.fillStyle = `rgb(${52 * v | 0},${42 * v | 0},${30 * v | 0})`; g.fillRect(px, py, q, q); }
         else if (st.floor === "bunker") { g.fillStyle = `rgb(${72 * v | 0},${72 * v | 0},${68 * v | 0})`; g.fillRect(px, py, q, q); g.fillStyle = "rgba(0,0,0,0.4)"; g.fillRect(px, py, q, 1.5 * k); g.fillRect(px, py, 1.5 * k, q); }
+        else if (st.floor === "hospital") { const w2 = ((x + y) % 2) ? 120 : 84; g.fillStyle = `rgb(${w2 * v | 0},${w2 * v | 0},${(w2 - 6) * v | 0})`; g.fillRect(px, py, q, q); }
         else { g.fillStyle = `rgb(${62 * v | 0},${58 * v | 0},${50 * v | 0})`; g.fillRect(px + k, py + k, q - 2 * k, q - 2 * k); }
       }
       if (st.floor === "mine") {
@@ -427,11 +495,15 @@ function buildStatic() {
   s.add(outer);
 
   // swamp water as one mesh
-  if (World.swamp.length) {
-    const wp = World.swamp.map(sw => { const g = new THREE.CircleGeometry(sw.r, 20); g.rotateX(-Math.PI / 2); g.translate(sw.x, 0.6, sw.y); return { geo: g, c: "#ffffff" }; });
-    const wm = new THREE.Mesh(mergeParts(wp), new THREE.MeshPhongMaterial({ color: 0x0a1412, shininess: 90, specular: 0x334440 }));
+  // swamp water is black; lakes and rivers are clear and catch the sky
+  for (const clear of [false, true]) {
+    const list = World.swamp.filter(sw => !!sw.lake === clear);
+    if (!list.length) continue;
+    const wp = list.map(sw => { const g = new THREE.CircleGeometry(sw.r, 20); g.rotateX(-Math.PI / 2); g.translate(sw.x, clear ? 0.7 : 0.6, sw.y); return { geo: g, c: "#ffffff" }; });
+    const wm = new THREE.Mesh(mergeParts(wp), new THREE.MeshPhongMaterial(clear ? { color: 0x1c3a46, shininess: 120, specular: 0x8aa8b8 } : { color: 0x0a1412, shininess: 90, specular: 0x334440 }));
     wm.receiveShadow = true;
     s.add(wm);
+    if (clear) V.waterMat = wm.material;
   }
 
   // houses: walls, lintels, furniture, floors, ceilings, roofs
@@ -504,10 +576,31 @@ function buildStatic() {
       case "carlift": sparts.push(box(f.x + 6, 50, cz, 8, 100, 8, "#6a6a20")); sparts.push(box(f.x + f.w - 6, 50, cz, 8, 100, 8, "#6a6a20")); sparts.push(box(cx, 18, cz, f.w, 6, f.h, "#4a4a44")); break;
       case "hay": for (let i = 0; i < 2; i++) parts.push(box(cx, 10 + i * 20, cz, f.w - i * 10, 20, f.h - 4, "#9a8a4a")); break;
       case "logs": for (let i = 0; i < 5; i++) parts.push(cyl(cx, 9 + (i % 2) * 15, f.y + 8 + i * (f.h - 16) / 4, 8, 8, f.w, "#5a4028", 8)); break;
+      // furniture that does something; f.face is the wall it stands against, "fr" points into the room
+      case "fireplace": case "sofa": case "radio": case "fridge": case "bookcase": case "tv": case "piano": case "medcab": case "plant": case "generator": {
+        const fr = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[f.face] || [0, 1], acr = fr[0] === 0; // acr: front faces along z
+        const W = acr ? f.w : f.h, D = acr ? f.h : f.w;
+        // local box helper: u along the wall, v into the room (from the back), y up
+        const L = (u, y, v, w, h, d, c, sh) => { const cxl = cx + (acr ? u : fr[0] * (v - D / 2)), czl = cz + (acr ? fr[1] * (v - D / 2) : u); return box(cxl, y, czl, acr ? w : d, h, acr ? d : w, c, sh); };
+        if (f.kind === "fireplace") { sparts.push(L(0, 35, D / 2, W, 70, D, "#7a6a5a", 0.25)); sparts.push(L(0, 74, D / 2 + 3, W + 10, 8, D + 6, "#5a4a3a")); parts.push(L(0, 20, D - 1, W * 0.6, 36, 2, "#120a06", 0)); sparts.push(L(0, 150, D * 0.3, W * 0.4, 150, D * 0.5, "#6a5a4a", 0.2)); }
+        else if (f.kind === "sofa") { parts.push(L(0, 10, D / 2, W, 20, D, "#5a3a32")); parts.push(L(0, 32, 5, W, 30, 10, "#5a3a32")); parts.push(L(-W / 2 + 5, 24, D / 2, 10, 18, D, "#4a2e28")); parts.push(L(W / 2 - 5, 24, D / 2, 10, 18, D, "#4a2e28")); parts.push(L(-W / 4, 22, D / 2 + 3, W / 2 - 14, 5, D - 12, "#6a463c")); parts.push(L(W / 4, 22, D / 2 + 3, W / 2 - 14, 5, D - 12, "#6a463c")); }
+        else if (f.kind === "radio") { parts.push(L(0, 15, D / 2, W, 30, D, "#3a2a1c")); parts.push(L(0, 34, D / 2, W, 10, D - 4, "#6a4a2a")); parts.push(L(-W / 4, 34, D, 10, 6, 1, "#c8b070", 0)); parts.push(L(W / 4, 34, D, 4, 4, 2, "#222", 0)); parts.push(L(W / 2 - 4, 48, 6, 1, 24, 1, "#888", 0)); }
+        else if (f.kind === "fridge") { parts.push(L(0, 42, D / 2, W, 84, D, "#d8d4c8", 0.05)); parts.push(L(0, 56, D + 0.5, W - 2, 1, 1, "#777", 0)); parts.push(L(W / 2 - 5, 66, D + 1, 2, 14, 2, "#888", 0)); parts.push(L(W / 2 - 5, 30, D + 1, 2, 18, 2, "#888", 0)); }
+        else if (f.kind === "bookcase") { parts.push(L(0, 46, D / 2, W, 92, D, "#3e2c1c")); for (let i = 0; i < 4; i++) { parts.push(L(0, 6 + i * 22, D / 2 + 1, W - 4, 2, D - 2, "#2a1e12")); for (let b = 0; b < 7; b++) parts.push(L(-W / 2 + 6 + b * ((W - 10) / 7), 15 + i * 22, D - 4, (W - 14) / 7 - 1, 14 + ((b * 7 + i * 3) % 5), 8, ["#6a2a22", "#2a3a5a", "#5a5a2a", "#2a4a2a", "#5a3a5a", "#7a6a4a"][(b + i * 2) % 6], 0)); } }
+        else if (f.kind === "tv") { parts.push(L(0, 12, D / 2, W, 24, D, "#3a2a1c")); parts.push(L(0, 38, D / 2, W * 0.8, 26, D * 0.8, "#2a2a28")); parts.push(L(0, 38, D * 0.9 + 0.5, W * 0.6, 18, 1, "#1a2a2a", 0)); }
+        else if (f.kind === "piano") { parts.push(L(0, 28, D / 2, W, 56, D, "#1e1612")); parts.push(L(0, 40, D + 6, W - 6, 4, 12, "#e8e4d8", 0)); for (let k = 0; k < 10; k++) parts.push(L(-W / 2 + 8 + k * (W - 14) / 10, 42.5, D + 4, 2, 1.5, 7, "#111", 0)); parts.push(L(0, 18, D + 6, W - 6, 36, 2, "#1e1612")); }
+        else if (f.kind === "medcab") { parts.push(L(0, 80, 6, W, 34, 12, "#e8e8e0", 0.05)); parts.push(L(0, 80, 12.5, 12, 3, 1, "#b02020", 0)); parts.push(L(0, 80, 12.6, 3, 12, 1, "#b02020", 0)); }
+        else if (f.kind === "plant") { sparts.push(cyl(cx, 8, cz, 7, 5, 16, "#8a4a2a", 8)); parts.push({ geo: new THREE.IcosahedronGeometry(11, 0).translate(cx, 26, cz), c: "#3a6a2a" }); }
+        else if (f.kind === "generator") { sparts.push(L(0, 18, D / 2, W, 30, D, "#5a6a3a", 0.2)); sparts.push(L(-W / 4, 36, D / 2, W / 3, 8, D * 0.6, "#3a3a32")); for (const s2 of [-1, 1]) sparts.push(L(s2 * W / 2, 18, D / 2, 2, 34, D + 4, "#222")); parts.push(L(W / 4, 24, D + 0.5, 8, 6, 1, "#c8a030", 0)); }
+        break;
+      }
+      case "gurney": parts.push(box(cx, 26, cz, f.w, 4, f.h, "#b8b8b0", 0.05)); parts.push(box(cx, 29, cz, f.w - 4, 3, f.h - 6, "#c8c4b8", 0)); for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) parts.push(box(cx + ox * (f.w / 2 - 3), 13, cz + oz * (f.h / 2 - 3), 2, 26, 2, "#888", 0)); break;
+      case "cabinet": parts.push(box(cx, 35, cz, f.w, 70, f.h, "#c8c8c0", 0.05)); parts.push(box(cx, 35, cz + f.h / 2 + 0.5, 1, 64, 1, "#666", 0)); break;
       case "barrel": sparts.push(cyl(cx, 20, cz, f.w / 2, f.w / 2, 40, "#3a4a3a", 12)); sparts.push(cyl(cx, 30, cz, f.w / 2 + 0.5, f.w / 2 + 0.5, 3, "#222", 12)); break;
     }
   }
   for (const st of World.stones) sparts.push(cyl(st.x, 55, st.y, st.r * 0.75, st.r, 110, "#6a665c", 6));
+  buildInteriors(s, rnd);
   const houseMesh = new THREE.Mesh(mergeParts(parts), lam(0xffffff, { vertexColors: true, map: { wood: V.tex.wood, stone: V.tex.brick, rock: V.tex.rock, concrete: V.tex.concrete }[wallKind] }));
   houseMesh.castShadow = houseMesh.receiveShadow = true;
   s.add(houseMesh);
@@ -623,13 +716,16 @@ function buildResources() {
     const birch = mergeParts(bp);
     const wreck = mergeParts([box(0, 14, 0, 96, 22, 46, "#5a3a26", 0.3), box(-6, 32, 0, 48, 16, 40, "#3a2a20", 0.2), box(30, 22, 0, 30, 6, 44, "#4a3020", 0.3), cyl(-30, 8, 24, 9, 9, 6, "#1a1a1a", 8), cyl(30, 8, -24, 9, 9, 6, "#1a1a1a", 8), box(-6, 32, 21, 40, 12, 1, "#101418"), box(-6, 32, -21, 40, 12, 1, "#101418")]);
     const scrapG = mergeParts([cyl(6, 11, 0, 9, 9, 22, "#6a4a30", 10), box(-8, 6, 4, 22, 12, 16, "#4a3428"), box(-4, 3, -10, 26, 4, 5, "#5a5a5a"), box(-14, 10, 6, 4, 18, 4, "#5a5a5a")]);
-    const grass = mergeParts([cyl(0, 7, 0, 0, 2.2, 14, "#2c3a1e", 3), cyl(3, 6, 2, 0, 1.8, 12, "#26331a", 3), cyl(-2, 8, -2, 0, 2, 16, "#304020", 3), cyl(1, 9, -3, 0, 1.6, 18, "#3a4a24", 3)]);
-    V.resGeo = { trunk, pine, birch, wreck, scrapG, grass, rock: new THREE.DodecahedronGeometry(1, 1), bush: new THREE.IcosahedronGeometry(1, 1) };
+    const grass = mergeParts([cyl(0, 7, 0, 0, 2.2, 14, "#9ab07a", 3), cyl(3, 6, 2, 0, 1.8, 12, "#88a06a", 3), cyl(-2, 8, -2, 0, 2, 16, "#a8bc84", 3), cyl(1, 9, -3, 0, 1.6, 18, "#b4c48c", 3), cyl(-4, 6, 3, 0, 1.6, 12, "#90a872", 3), cyl(4, 8, -1, 0, 1.4, 16, "#a0b47e", 3)]);
+    // a few wild flowers on thin stems
+    const flower = mergeParts([cyl(0, 7, 0, 0.4, 0.4, 14, "#5a7a3a", 3), cyl(4, 6, 3, 0.4, 0.4, 12, "#5a7a3a", 3), cyl(-3, 8, -2, 0.4, 0.4, 16, "#5a7a3a", 3),
+      { geo: new THREE.IcosahedronGeometry(2.2, 0).translate(0, 14.5, 0), c: "#ffffff" }, { geo: new THREE.IcosahedronGeometry(2, 0).translate(4, 12.5, 3), c: "#ffffff" }, { geo: new THREE.IcosahedronGeometry(2.1, 0).translate(-3, 16.5, -2), c: "#ffffff" }]);
+    V.resGeo = { trunk, pine, birch, wreck, scrapG, grass, flower, rock: new THREE.DodecahedronGeometry(1, 1), bush: new THREE.IcosahedronGeometry(1, 1) };
     V.resMat = {
       trunk: lam(0xffffff, { map: V.tex.bark }), birchTrunk: lam(0xffffff, { map: V.tex.birch }),
       pine: lam(0xffffff, { vertexColors: true, map: V.tex.needles }), birch: lam(0xffffff, { vertexColors: true, map: V.tex.needles }),
       rock: lam(0x8a8880, { map: V.tex.stone, flatShading: true }), bush: lam(0xffffff, { flatShading: true }),
-      wreck: lam(0xffffff, { vertexColors: true, map: V.tex.concrete }), scrap: lam(0xffffff, { vertexColors: true }), grass: lam(0xffffff, { vertexColors: true }),
+      wreck: lam(0xffffff, { vertexColors: true, map: V.tex.concrete }), scrap: lam(0xffffff, { vertexColors: true }), grass: lam(0xffffff, { vertexColors: true }), flower: lam(0xffffff, { vertexColors: true }),
     };
   }
   const G3 = V.resGeo, M = V.resMat;
@@ -637,7 +733,7 @@ function buildResources() {
   const chunkOf = (x, y) => {
     const k = Math.floor(x / CHUNK) + ":" + Math.floor(y / CHUNK);
     let c = chunks.get(k);
-    if (!c) { c = { cx: (Math.floor(x / CHUNK) + 0.5) * CHUNK, cy: (Math.floor(y / CHUNK) + 0.5) * CHUNK, L: { pine: [], birch: [], rock: [], bush: [], scrap: [], wreck: [], grass: [] } }; chunks.set(k, c); }
+    if (!c) { c = { cx: (Math.floor(x / CHUNK) + 0.5) * CHUNK, cy: (Math.floor(y / CHUNK) + 0.5) * CHUNK, L: { pine: [], birch: [], rock: [], bush: [], scrap: [], wreck: [], grass: [], flower: [] } }; chunks.set(k, c); }
     return c;
   };
   World.res.forEach((o, i) => {
@@ -647,9 +743,9 @@ function buildResources() {
     else L[o.type].push(i);
   });
   World.props.forEach((p, i) => {
-    if (p.k || (V.mobile && i % 2)) return;
-    if (insideHouse(p.x, p.y, 10) || distToRoad(p.x, p.y) < 26) return;
-    chunkOf(p.x, p.y).L.grass.push(i);
+    if (V.mobile && i % 2) return;
+    if (insideHouse(p.x, p.y, 10) || distToRoad(p.x, p.y) < 26 || inSwamp(p.x, p.y)) return;
+    chunkOf(p.x, p.y).L[p.k && !World.indoor ? "flower" : "grass"].push(i);
   });
   V.chunks = [];
   for (const c of chunks.values()) {
@@ -661,11 +757,22 @@ function buildResources() {
       birchT: mk(G3.trunk, M.birchTrunk, c.L.birch.length, true), birchC: mk(G3.birch, M.birch, c.L.birch.length, true),
       rock: mk(G3.rock, M.rock, c.L.rock.length, true), bush: mk(G3.bush, M.bush, c.L.bush.length, false),
       scrap: mk(G3.scrapG, M.scrap, c.L.scrap.length, true), wreck: mk(G3.wreck, M.wreck, c.L.wreck.length, true),
-      grass: mk(G3.grass, M.grass, c.L.grass.length, false),
+      grass: mk(G3.grass, M.grass, c.L.grass.length, false), flower: mk(G3.flower, M.flower, c.L.flower.length, false),
     };
-    c.L.pine.forEach((ri, k) => { const o = World.res[ri]; c.m.pineT.setColorAt(k, tmpC.set(o.dead ? 0x4a4440 : 0x3a2a1c)); c.m.pineC.setColorAt(k, tmpC.setRGB(0.05 + o.hue * 0.03, 0.11 + o.hue * 0.06, 0.06 + o.hue * 0.02)); });
+    c.L.pine.forEach((ri, k) => { const o = World.res[ri]; c.m.pineT.setColorAt(k, tmpC.set(o.dead ? 0x4a4440 : 0x3a2a1c)); c.m.pineC.setColorAt(k, tmpC.setRGB(0.09 + o.hue * 0.05, 0.2 + o.hue * 0.1, 0.09 + o.hue * 0.04)); });
     c.L.birch.forEach((ri, k) => { const o = World.res[ri]; c.m.birchT.setColorAt(k, tmpC.setRGB(0.85, 0.83, 0.78)); c.m.birchC.setColorAt(k, tmpC.setRGB(0.16 + o.hue * 0.1, 0.22 + o.hue * 0.06, 0.08)); });
-    c.L.grass.forEach((pi, k) => { const p = World.props[pi]; tmpO.position.set(p.x, 0, p.y); tmpO.rotation.set(0, p.s * 6, 0); tmpO.scale.setScalar(0.8 + p.s * 0.9); tmpO.updateMatrix(); c.m.grass.setMatrixAt(k, tmpO.matrix); });
+    // grass: greens with a touch of yellow, darker in the swamp-ish regions
+    c.L.grass.forEach((pi, k) => {
+      const p = World.props[pi], reg = World.indoor ? null : regionAt(p.x, p.y), dry = reg && reg.dead ? 0.5 : 0, v = (p.s * 7.13) % 1;
+      tmpO.position.set(p.x, 0, p.y); tmpO.rotation.set(0, p.s * 6, 0); tmpO.scale.setScalar(0.8 + p.s * 0.9); tmpO.updateMatrix(); c.m.grass.setMatrixAt(k, tmpO.matrix);
+      c.m.grass.setColorAt(k, tmpC.setRGB(0.28 + v * 0.2 + dry * 0.2, 0.42 + v * 0.16 - dry * 0.05, 0.16 + v * 0.06));
+    });
+    const FL = [[0.95, 0.95, 0.9], [0.95, 0.82, 0.25], [0.62, 0.45, 0.85], [0.9, 0.3, 0.25], [0.45, 0.6, 0.95]];
+    c.L.flower.forEach((pi, k) => {
+      const p = World.props[pi];
+      tmpO.position.set(p.x, 0, p.y); tmpO.rotation.set(0, p.s * 6, 0); tmpO.scale.setScalar(0.8 + p.s * 0.6); tmpO.updateMatrix(); c.m.flower.setMatrixAt(k, tmpO.matrix);
+      const f = FL[Math.floor(p.s * 997) % FL.length]; c.m.flower.setColorAt(k, tmpC.setRGB(f[0], f[1], f[2]));
+    });
     V.chunks.push(c);
   }
   syncResources();
@@ -729,6 +836,7 @@ function buildMapDressing(s) {
       case "pump": place([B(0, 30, 0, 22, 60, 16, "#b0a890"), B(0, 50, 8.5, 14, 14, 1, "#203020"), C(10, 30, 9, 1.5, 1.5, 30, "#111", 5)], d.x, d.y, d.a); break;
       case "soil": place([B(0, 3, -24, 90, 6, 14, "#2a1e12"), B(0, 3, 0, 90, 6, 14, "#2a1e12"), B(0, 3, 24, 90, 6, 14, "#2a1e12")], d.x, d.y, d.a); break;
       case "scarecrow": place([C(0, 60, 0, 2.5, 2.5, 120, wood), C(0, 92, 0, 2, 2, 70, wood, 5, 0, Math.PI / 2), S(0, 124, 0, 11, "#8a7a5a"), B(0, 86, 0, 26, 40, 14, "#3a2e24"), S(4, 126, 5, 2, "#000"), S(4, 126, -5, 2, "#000"), B(0, 140, 0, 30, 4, 30, "#2a2018")], d.x, d.y, d.a); break;
+      case "bridge": { const L = 260 * d.s; place([B(0, 8, 0, L, 6, 96, "#5a4430"), ...[-1, 1].map(z => B(0, 34, z * 46, L, 4, 4, "#4a3624")), ...[-0.45, -0.15, 0.15, 0.45].flatMap(t => [-1, 1].map(z => B(t * L, 20, z * 46, 5, 30, 5, "#3a2a1c"))), ...[-0.4, 0, 0.4].flatMap(t => [-1, 1].map(z => C(t * L, -10, z * 40, 5, 5, 40, wood)))], d.x, d.y, d.a); break; }
       case "pier": place([...[0, 1, 2, 3, 4, 5, 6, 7].map(i => B(0, 4, -i * 40, 60, 4, 36, "#4a3a28")), ...[0, 2, 4, 6].map(i => C(-28, 0, -i * 40, 3, 3, 30, wood)), ...[0, 2, 4, 6].map(i => C(28, 0, -i * 40, 3, 3, 30, wood))], d.x, d.y, d.a); break;
       case "tower": place([C(-40, 300, -40, 3, 5, 600, "#5a5a5a", 4, 0, 0.06), C(40, 300, -40, 3, 5, 600, "#5a5a5a", 4, 0, -0.06), C(-40, 300, 40, 3, 5, 600, "#5a5a5a", 4, 0, 0.06), C(40, 300, 40, 3, 5, 600, "#5a5a5a", 4, 0, -0.06), ...[1, 2, 3, 4, 5].map(i => B(0, i * 110, 0, 90 - i * 10, 3, 90 - i * 10, "#5a5a5a"))], d.x, d.y, d.a); break;
       case "flag": place([C(0, 110, 0, 2, 3, 220, "#666", 6), B(0, 200, 22, 2, 26, 40, "#601010")], d.x, d.y, d.a); break;
@@ -780,6 +888,20 @@ function buildMapDressing(s) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(11, 1.4, 5, 16), metal); ring.rotation.x = Math.PI / 2; ring.position.y = 1.5; g.add(ring);
       for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; const c = new THREE.Mesh(new THREE.ConeGeometry(1.2, 6, 4), metal); c.position.set(Math.cos(a) * 9, 4, Math.sin(a) * 9); g.add(c); }
       V.hz.push({ i, kind: "bear", g });
+    } else if (h.kind === "gas") {
+      // a low green cloud that breathes
+      const g = new THREE.Group(); g.position.set(h.x, 0, h.y); s.add(g);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(h.r, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: h.mad ? 0x8a6aa0 : 0x6aa030, transparent: true, opacity: 0.25, depthWrite: false })); disc.position.y = 2; g.add(disc);
+      const puffs = [];
+      for (let k = 0; k < 6; k++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: V.tex.puff, color: h.mad ? 0x9a7ab0 : 0x8ac040, transparent: true, opacity: 0.35, depthWrite: false })); sp.scale.setScalar(h.r * 0.9); g.add(sp); puffs.push(sp); }
+      V.hz.push({ i, kind: "gas", g, puffs });
+    } else if (h.kind === "rocks") {
+      // a cracked patch on the ceiling; boulders appear once it has come down
+      const g = new THREE.Group(); g.position.set(h.x, 0, h.y); s.add(g);
+      const crack = new THREE.Mesh(new THREE.CircleGeometry(h.r * 0.8, 10).rotateX(Math.PI / 2), lam(0x1a140e)); crack.position.y = WALL_H - 1; g.add(crack);
+      const rocks = new THREE.Group(); g.add(rocks);
+      for (let k = 0; k < 5; k++) { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(10 + Math.random() * 10, 0), lam(0x5a5040, { flatShading: true })); r.position.set((Math.random() - 0.5) * h.r, 8, (Math.random() - 0.5) * h.r); r.rotation.set(Math.random() * 3, Math.random() * 3, 0); rocks.add(r); }
+      V.hz.push({ i, kind: "rocks", rocks });
     } else if (h.kind === "wire") {
       const L = Math.hypot(h.x2 - h.x1, h.y2 - h.y1);
       const w = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, L, 3), new THREE.MeshBasicMaterial({ color: 0xb0b0a0, transparent: true, opacity: 0 }));
@@ -972,6 +1094,10 @@ function syncCreepy(dt) {
       const d2 = dist2(p.x, p.y, h.x, h.y);
       v.g.visible = !h.armed || d2 < 55 * 55 || (isBeamLit(h.x, h.y, 10) && d2 < 260 * 260);
       v.g.scale.y = h.armed ? 1 : 0.4;
+    } else if (v.kind === "gas") {
+      v.puffs.forEach((sp, k) => { const a = V.time * 0.3 + k * 1.05; sp.position.set(Math.cos(a) * h.r * 0.4, 18 + Math.sin(V.time * 0.7 + k) * 6, Math.sin(a * 1.3) * h.r * 0.4); sp.material.opacity = 0.28 + 0.1 * Math.sin(V.time + k); });
+    } else if (v.kind === "rocks") {
+      v.rocks.visible = !h.armed;
     } else if (v.kind === "wire") {
       const lit = h.armed && (isBeamLit((h.x1 + h.x2) / 2, (h.y1 + h.y2) / 2, 30) && dist2(p.x, p.y, h.x1, h.y1) < 280 * 280);
       v.w.material.opacity = lit ? 0.8 : 0;
@@ -982,7 +1108,9 @@ function syncCreepy(dt) {
   (V.lampMeshes || []).forEach(g => {
     if (!g) return;
     if (g.userData.flame) { const k = 0.85 + Math.random() * 0.3; g.userData.flame.scale.set(k, k * (0.9 + Math.random() * 0.3), k); }
-    if (g.userData.tube) g.userData.tube.material.color.setScalar(Math.random() < 0.06 ? 0.15 : 1);
+    const on = !g.userData.l || lightOn(g.userData.l);
+    if (g.userData.tube) g.userData.tube.material.color.setScalar(!on ? 0.08 : Math.random() < 0.06 ? 0.15 : 1);
+    if (g.userData.bulb) { g.userData.bulb.material.color.set(on ? 0xffd090 : 0x3a3428); g.userData.halo.visible = on; }
   });
 }
 
@@ -1526,7 +1654,7 @@ function syncDynamic(dt) {
   for (const f of G.fires) {
     const m = dynMesh(f, () => {
       const g = new THREE.Group();
-      for (let i = 0; i < 8; i++) { const st = new THREE.Mesh(new THREE.DodecahedronGeometry(5, 0), lam(0x444440)); st.position.set(Math.cos(i * 0.785) * 16, 2, Math.sin(i * 0.785) * 16); g.add(st); }
+      if (!f.hearth) for (let i = 0; i < 8; i++) { const st = new THREE.Mesh(new THREE.DodecahedronGeometry(5, 0), lam(0x444440)); st.position.set(Math.cos(i * 0.785) * 16, 2, Math.sin(i * 0.785) * 16); g.add(st); }
       for (let i = 0; i < 3; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 26, 6), lam(0x4a3420)); l.rotation.set(Math.PI / 2, i * 1.05, 0.4); l.position.y = 4; g.add(l); }
       const fl = new THREE.Mesh(new THREE.ConeGeometry(7, 22, 7), glowMat(0xff8a20)); fl.position.y = 14; g.add(fl);
       const fl2 = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 7), glowMat(0xffe080)); fl2.position.y = 10; g.add(fl2);
@@ -1593,21 +1721,26 @@ function syncDynamic(dt) {
 function syncLights(dt) {
   const p = G.p, n = G.night, storm = G.storm || 0, wfog = World.indoor ? 0 : G.wfog || 0;
   // sky, fog and ambient follow the time of day and the weather: a clear day is sunny and far-seeing,
-  // fog and rain bring the grey back, the night is pitch black
-  const dl = 1 - n, day = dl * (1 - storm * 0.45) * (1 - wfog * 0.35);
+  // fog is a light bluish mist that keeps colours near you, rain darkens, the night is pitch black;
+  // at dusk and dawn the sky turns warm
+  const dl = 1 - n, day = dl * (1 - storm * 0.45) * (1 - wfog * 0.2);
   const sunny = V.sunny = dl * (1 - storm) * (1 - wfog);
+  const dusk = V.dusk = World.indoor ? 0 : clamp(1 - Math.abs(n - 0.35) / 0.32, 0, 1) * (1 - storm * 0.7);
   const fogC = tmpC.setRGB(lerp(0.004, 0.17, day), lerp(0.006, 0.19, day), lerp(0.012, 0.18, day));
   fogC.lerp(tmpC2.setRGB(0.58, 0.68, 0.78), sunny);
-  if (wfog > 0) fogC.lerp(tmpC2.setRGB(0.36 * dl + 0.01, 0.38 * dl + 0.012, 0.37 * dl + 0.014), wfog * 0.7);
+  if (wfog > 0) fogC.lerp(tmpC2.setRGB(0.66 * dl + 0.012, 0.74 * dl + 0.016, 0.8 * dl + 0.024), wfog * 0.85);
+  if (dusk > 0) fogC.lerp(tmpC2.setRGB(0.5, 0.32, 0.26), dusk * 0.7);
   V.scene.fog.color.copy(fogC); V.scene.background.copy(fogC);
   V.skyMat.uniforms.bot.value.copy(fogC);
   V.skyMat.uniforms.top.value.setRGB(lerp(0.008, 0.3, day), lerp(0.012, 0.36, day), lerp(0.03, 0.42, day)).lerp(tmpC2.setRGB(0.16, 0.36, 0.72), sunny);
+  if (wfog > 0) V.skyMat.uniforms.top.value.lerp(tmpC2.setRGB(0.5 * dl + 0.01, 0.6 * dl + 0.012, 0.72 * dl + 0.03), wfog * 0.8);
+  if (dusk > 0) V.skyMat.uniforms.top.value.lerp(tmpC2.setRGB(0.18, 0.16, 0.36), dusk * 0.8);
   // thick fog: the forest ends a few steps beyond the flashlight; the swamp is worse
   const reg = World.indoor ? null : regionAt(p.x, p.y);
   V.mf = lerp(V.mf || 1, World.indoor ? MAPS[World.map].fog : (reg && reg.fog) || 1, 0.02);
   const mf = lerp(V.mf, 1 + (V.mf - 1) * 0.4, sunny), clearFar = V.quality === "low" ? 1500 : 2300;
-  V.scene.fog.near = lerp(lerp(6, 110, day) * (1 - storm * 0.3), 320, sunny) * (1 - wfog * 0.9) / mf;
-  V.scene.fog.far = lerp(lerp(400, 1350, day) * (1 - storm * 0.25), clearFar, sunny) * (1 - wfog * 0.68) * (G.inside ? 0.85 : 1) / mf;
+  V.scene.fog.near = lerp(lerp(6, 110, day) * (1 - storm * 0.3), 320, sunny) * (1 - wfog * dl * 0.4) / mf;
+  V.scene.fog.far = lerp(lerp(400, 1350, day) * (1 - storm * 0.25), clearFar, sunny) * (1 - wfog * (0.3 + n * 0.3)) * (G.inside ? 0.85 : 1) / mf;
   if (World.altar && n > 0.5) {
     const ad = Math.hypot(p.x - World.altar.x, p.y - World.altar.y), k = clamp(1 - ad / 700, 0, 1) * 0.8;
     if (k > 0) { fogC.lerp(tmpC2.setRGB(0.06, 0.004, 0.002), k); V.scene.fog.color.copy(fogC); V.scene.background.copy(fogC); V.skyMat.uniforms.bot.value.copy(fogC); }
@@ -1618,19 +1751,21 @@ function syncLights(dt) {
   }
   // lightning: two quick flashes light the whole forest
   const b = G.bolt || 0, flash = b > 0.27 || (b > 0.1 && b < 0.17) ? 1 : 0;
-  V.hemi.intensity = World.indoor ? 0.025 : lerp(0.05, 1.3, day * day) + sunny * 0.9 + flash * 2.2;
-  V.renderer.toneMappingExposure = 1.3 + sunny * 0.25;
+  const mist = wfog * dl; // a misty day is soft but still bright
+  V.hemi.intensity = World.indoor ? 0.025 : lerp(0.05, 1.3, day * day) + sunny * 0.9 + mist * 0.9 + flash * 2.2;
+  V.renderer.toneMappingExposure = 1.3 + sunny * 0.25 + mist * 0.15;
   // the painted ground is dark for the night; under the sun it shows its colours
-  if (V.groundMat && !World.indoor) V.groundMat.color.setScalar(1 + sunny * 1.4);
+  if (V.groundMat && !World.indoor) V.groundMat.color.setScalar(1 + sunny * 1.4 + mist * 1.1);
   V.hemi.color.setRGB(0.6, 0.65, 0.72).lerp(tmpC2.setRGB(0.62, 0.74, 0.95), sunny);
   // the same directional light is the moon at night and the sun by day
   V.moon.intensity = World.indoor ? 0 : lerp(0.11, 1.0, day) + sunny * 2.2 + flash * 3;
-  V.moon.color.setRGB(lerp(0.55, 1, day), lerp(0.62, 0.96, day), lerp(0.85, 0.9, day)).lerp(tmpC2.setRGB(1, 0.9, 0.74), sunny);
+  V.moon.intensity += mist * 0.8 + dusk * 0.6;
+  V.moon.color.setRGB(lerp(0.55, 1, day), lerp(0.62, 0.96, day), lerp(0.85, 0.9, day)).lerp(tmpC2.setRGB(1, 0.9, 0.74), sunny).lerp(tmpC2.setRGB(1, 0.55, 0.3), dusk * 0.8);
   if (flash) V.skyMat.uniforms.top.value.setRGB(0.5, 0.55, 0.7);
   V.stars.material.opacity = clamp(n * 1.2 - 0.2, 0, 1) * (1 - storm);
   const sun = clamp(sunny * 1.4 - 0.3, 0, 1), moonA = clamp(n * 1.2 - 0.2, 0, 1) * (1 - storm * 0.85) * (1 - wfog * 0.8);
   V.moonDisc.material.opacity = Math.max(moonA, sun);
-  V.moonDisc.material.color.setRGB(0.87, 0.9, 1).lerp(tmpC2.setRGB(1, 0.95, 0.82), sunny);
+  V.moonDisc.material.color.setRGB(0.87, 0.9, 1).lerp(tmpC2.setRGB(1, 0.95, 0.82), sunny).lerp(tmpC2.setRGB(1, 0.5, 0.25), dusk * sunny);
   V.moonDisc.scale.setScalar(lerp(360, 520, sunny));
 
   // flashlight: weak battery and nearby horrors make it flicker
@@ -1653,7 +1788,7 @@ function syncLights(dt) {
   // the closest light sources get the point lights from the pool
   const cand = [];
   for (const f of G.fires) cand.push({ x: f.x, y: f.y, h: 20 + Math.random() * 4, r: 330, i: 3 * (0.8 + 0.2 * Math.sin(V.time * 13 + f.x) * Math.random()), c: 0xff9040 });
-  for (const l of World.lights) cand.push({ x: l.x + (l.torch ? 0 : l.ox), y: l.y + (l.torch ? 0 : l.oy), h: l.torch ? 84 : WALL_H - 32, r: l.r * 1.3, i: 3 * (1 - l.flick + l.flick * Math.sin(V.time * 9 + l.x)), c: new THREE.Color(`rgb(${l.col})`).getHex() });
+  for (const l of World.lights) if (lightOn(l)) cand.push({ x: l.x + (l.torch ? 0 : l.ox), y: l.y + (l.torch ? 0 : l.oy), h: l.torch ? 84 : WALL_H - 32, r: l.r * 1.3, i: 3 * (1 - l.flick + l.flick * Math.sin(V.time * 9 + l.x)), c: new THREE.Color(`rgb(${l.col})`).getHex() });
   for (const pr of G.projs) if (pr.kind === "firezone") cand.push({ x: pr.x, y: pr.y, h: 20, r: 300, i: 4 * Math.min(1, pr.life / 2) * (0.8 + Math.random() * 0.3), c: 0xff8020 });
   if (G.drop && G.drop.landed && !G.drop.looted && World.map === "forest") cand.push({ x: G.drop.x, y: G.drop.y, h: 20, r: 260, i: 2.5 * (0.7 + Math.random() * 0.4), c: 0xff3018 });
   for (const o of World.inter) if (STORY_MODE && o.type === "seal" && !G.seals.includes(o.seal)) cand.push({ x: o.x, y: o.y, h: 30, r: 120, i: 2, c: o.seal === "heart" ? 0xff3020 : o.seal === "eye" ? 0x50c8ff : 0xfff0d0 });
@@ -1686,7 +1821,7 @@ function syncAtmosphere(dt) {
     f.position.set(u.x, u.h + Math.sin(V.time * 0.3 + u.ph) * 4, u.y);
     f.lookAt(cam.position.x, f.position.y, cam.position.z);
     const dd = Math.sqrt(dist2(u.x, u.y, p.x, p.y));
-    f.material.opacity = Math.min(0.85, 0.55 * (0.45 + n * 0.55) * (V.mf || 1) * (1 - (V.sunny || 0) * 0.85) + (G.wfog || 0) * 0.3) * clamp((dd - 40) / 120, 0, 1) * (World.indoor ? 0.5 : 1);
+    f.material.opacity = Math.min(0.85, 0.55 * (0.45 + n * 0.55) * (V.mf || 1) * (1 - (V.sunny || 0) * 0.85) + (G.wfog || 0) * 0.18) * clamp((dd - 40) / 120, 0, 1) * (World.indoor ? 0.5 : 1);
   });
   // rain
   const storm = G.storm || 0, R = V.rain;

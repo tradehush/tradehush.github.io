@@ -108,8 +108,11 @@ const MAPS = {
   catacombs: { n: "Катакомбы под часовней",  kind: "dungeon", wall: "stone",    fog: 1,    spawn: { ghoul: 50, crawler: 35, stalker: 15 } },
   mine:      { n: "Старая шахта",            kind: "dungeon", wall: "rock",     fog: 1,    spawn: { crawler: 55, brute: 20, spitter: 25 } },
   bunker:    { n: "Военный бункер",          kind: "dungeon", wall: "concrete", fog: 1,    spawn: { ghoul: 40, stalker: 35, brute: 25 } },
+  sewer:     { n: "Затопленный коллектор",   kind: "dungeon", wall: "concrete", fog: 1.2,  spawn: { crawler: 50, spitter: 35, ghoul: 15 } },
+  hospital:  { n: "Подвал больницы",         kind: "dungeon", wall: "concrete", fog: 1,    spawn: { ghoul: 40, stalker: 40, crawler: 20 } },
+  cave:      { n: "Медвежья пещера",         kind: "dungeon", wall: "rock",     fog: 1.1,  spawn: { crawler: 40, brute: 30, spitter: 30 } },
 };
-const MAP_LINKS = { forest: ["catacombs", "mine", "bunker"], catacombs: ["forest"], mine: ["forest"], bunker: ["forest"] };
+const MAP_LINKS = { forest: ["catacombs", "mine", "bunker", "sewer", "hospital", "cave"], catacombs: ["forest"], mine: ["forest"], bunker: ["forest"], sewer: ["forest"], hospital: ["forest"], cave: ["forest"] };
 const SEAL_MAP = { bone: "catacombs", heart: "forest", eye: "forest" };
 
 // The story (seals, the Master of the forest, endings) is kept but switched off for now:
@@ -226,6 +229,22 @@ const NOTES_EXTRA = {
 День 35. Из дальнего отсека стучат. Ритмично. Кравец не может так долго стучать.
 
 День 36. Оружие сложено в ящик в конце западного коридора. Если читаешь это — бери и уходи. Не открывай дальний отсек.` },
+  sewer: { t: "Мокрый листок в бутылке", b:
+`Если найдёшь — не ходи по зелёному туману. Это не туман, это то, что гниёт внизу. Дышать им нельзя.
+
+Генератор у насосной ещё работает, если залить бензина. Но когда он загудел в прошлый раз, они пришли со всех труб сразу.
+
+Тайник Седого — в самом конце, за последней решёткой. Он всё равно уже не вернётся.` },
+  hospital: { t: "Карта пациента №17", b:
+`Пациент поступил из леса. Жалобы: «они смотрят из-за деревьев». Зрачки не реагируют на свет.
+
+Ночью пациент покинул палату. Утром в подвале найдены все койки, сдвинутые к стене. Ровным рядом.
+
+Главврач запер сейф с лекарствами и пистолетом охраны в дальнем кабинете подвала. Ключ при нём. Главврача никто не видел с четверга.` },
+  cave: { t: "Нацарапано на камне", b:
+`Свод осыпается. Где на потолке трещины и песок сыплется — беги, не стой.
+
+Мой рюкзак с арбалетом остался в самой глубине. Там тепло и пахнет зверем. Это не медведь. Медведи не ходят на двух ногах.` },
   mine: { t: "Записка шахтёра", b:
 `На сороковом метре нашли старые ходы. Не наши. Стены исцарапаны — изнутри.
 

@@ -181,6 +181,14 @@ const Sound = (() => {
     splash() { noise(0.4, { type: "lowpass", freq: 1500, freqEnd: 300, vol: 0.3, attack: 0.01 }); },
     bite() { noise(0.15, { type: "bandpass", freq: 1200, q: 3, vol: 0.4 }); tone(900, 0.12, { vol: 0.15 }); tone(1300, 0.12, { vol: 0.12, when: 0.12 }); },
     plane() { noise(9, { type: "lowpass", freq: 260, vol: 0.35, attack: 2.5 }); tone(85, 9, { type: "sawtooth", vol: 0.05, freqEnd: 70, attack: 2.5 }); },
+    piano() {
+      // a few wrong notes on an old upright
+      const sc = [220, 246.9, 261.6, 293.7, 329.6, 349.2, 392, 415.3];
+      for (let i = 0; i < 6; i++) { const f = sc[Math.floor(Math.random() * sc.length)] * (Math.random() < 0.3 ? 0.5 : 1); tone(f, 1.4, { type: "triangle", vol: 0.16, when: i * 0.32 }); tone(f * 2.01, 0.9, { vol: 0.05, when: i * 0.32 }); }
+    },
+    switchClick() { tone(1800, 0.02, { type: "square", vol: 0.1 }); noise(0.03, { type: "highpass", freq: 3000, vol: 0.15 }); },
+    hum() { tone(50, 2.5, { type: "sawtooth", vol: 0.12, attack: 0.4 }); tone(100, 2.5, { vol: 0.06, attack: 0.4 }); noise(1.5, { type: "lowpass", freq: 300, vol: 0.2, attack: 0.3 }); },
+    tvStatic() { noise(2.2, { type: "highpass", freq: 1500, vol: 0.22, attack: 0.02 }); },
     bossRoar() { tone(45, 2, { type: "sawtooth", vol: 0.5, freqEnd: 30, attack: 0.2 }); noise(2, { type: "lowpass", freq: 500, vol: 0.6, attack: 0.3 }); },
   };
 })();

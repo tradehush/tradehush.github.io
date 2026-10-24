@@ -41,6 +41,7 @@ function renderHud(dt) {
 
 function drawScreenFx(ctx) {
   const p = G.p, W = R.W, H = R.H;
+  if (G.gasT > 0) { ctx.fillStyle = `rgba(70,130,30,${0.22 * Math.min(1, G.gasT / 0.35)})`; ctx.fillRect(0, 0, W, H); }
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
   const sanK = 1 - p.san / 100;
   vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, `rgba(0,0,0,${0.32 + sanK * 0.45})`);
@@ -160,6 +161,25 @@ function drawHUD(ctx) {
     if (w.ammo) { font(9); ctx.fillStyle = "#d8c890"; ctx.fillText(w.mag ? `${G.mag[id] || 0}/${G.inv[w.ammo] || 0}` : `${G.inv[w.ammo] || 0}`, hx + slot / 2, hy - 6 * u); }
     if (n > 1) { font(8, ""); ctx.fillStyle = "rgba(230,225,210,0.5)"; ctx.fillText(`${G.wi + 1}/${n}`, hx + slot + 10 * u, hy + slot / 2); }
     ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  }
+  // quick bar: only the filled slots, small, to the right of the weapon
+  R.quick = [];
+  if (!G.drive && G.quick) {
+    const qs = 30 * u, gap = 6 * u; let qx = hx + slot + 28 * u;
+    G.quick.forEach((k, i) => {
+      if (!k) return;
+      const cnt = k.startsWith("w:") ? null : G.inv[k] || 0, cy = hy + slot - qs / 2;
+      ctx.globalAlpha = cnt === 0 ? 0.35 : 0.8;
+      ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.strokeStyle = "rgba(216,200,144,0.35)"; ctx.lineWidth = 1 * u;
+      ctx.beginPath(); ctx.arc(qx + qs / 2, cy, qs / 2, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.font = `${qs * 0.5}px serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff";
+      ctx.fillText(quickIcon(k), qx + qs / 2, cy + 1 * u);
+      if (cnt !== null) { font(8); ctx.fillStyle = "#e8dcb0"; ctx.fillText(String(cnt), qx + qs - 3 * u, cy + qs / 2 - 3 * u); }
+      if (!touch) { font(8, ""); ctx.fillStyle = "rgba(230,225,210,0.5)"; ctx.fillText(String(i + 5), qx + qs / 2, cy - qs / 2 - 6 * u); }
+      ctx.textBaseline = "alphabetic"; ctx.textAlign = "left"; ctx.globalAlpha = 1;
+      R.quick.push({ i, x: qx / u, y: (cy - qs / 2) / u, s: qs / u });
+      qx += qs + gap;
+    });
   }
   if (p.reloadT > 0) { const k = 1 - p.reloadT / curW().reload; ctx.strokeStyle = "#d8c890"; ctx.lineWidth = 3 * u; ctx.beginPath(); ctx.arc(W / 2, H / 2, 14 * u, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
 

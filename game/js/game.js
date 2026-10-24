@@ -1,6 +1,7 @@
 "use strict";
 // Game state and simulation.
 
+const WORLD_V = 2;
 const SAVE_KEY = "blackpine.save.v3";
 const FLASH_RANGE = 440, FLASH_HALF = 0.5, FLASH_RAYS = 72, HALO_R = 85;
 
@@ -69,7 +70,7 @@ function newGame() {
   G.seed = 1337;
   generateWorld(G.seed, "forest");
   Object.assign(G, { t: 15 / 24, day: 1, step: 0, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
-    inv: { bandage: 1 }, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {}, msgs: [],
+    inv: { bandage: 1 }, quick: ["bandage", null, null, null], power: {}, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {}, msgs: [],
     boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 20, figT: 70,
     storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
@@ -105,7 +106,7 @@ function save() {
     const p = G.p;
     G.maps[World.map] = snapMap();
     const data = { v: 3, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive, drop: G.drop, nextDrop: G.nextDrop, raidDay: G.raidDay,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive, drop: G.drop, nextDrop: G.nextDrop, raidDay: G.raidDay, quick: G.quick, power: G.power, wv: WORLD_V,
       p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, food: p.food, light: p.light } };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
@@ -122,7 +123,9 @@ function load() {
   G.seed = d.seed;
   generateWorld(d.seed, d.map || "forest");
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map, drop: d.drop || null, nextDrop: d.nextDrop || 3, raidDay: d.raidDay || 0 });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map, drop: d.drop || null, nextDrop: d.nextDrop || 3, raidDay: d.raidDay || 0, quick: d.quick || ["bandage", null, null, null], power: d.power || {} });
+  // the world layout changed since this save: keep builds and things, forget per-object states
+  if (d.wv !== WORLD_V) for (const k in G.maps) { G.maps[k].res = []; G.maps[k].it = []; G.maps[k].hz = []; }
   if (G.drop && G.drop.landed && !G.drop.looted) placeDropCrate();
   applyMap(G.maps[World.map]);
   Object.assign(G.p, d.p);
@@ -323,7 +326,7 @@ function freeSpot(cx, cy, minD, maxD, allowHouse = false, avoidLight = true) {
       if (G.night < 0.5 && inBase(x, y)) bad = true;
       for (const b of G.builds) if (b.k === "light" && dist2(x, y, b.x, b.y) < 600 * 600) bad = true;
       for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 420 * 420) bad = true;
-      for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r + 260) ** 2) bad = true;
+      for (const l of World.lights) if (lightOn(l) && dist2(x, y, l.x, l.y) < (l.r + 260) ** 2) bad = true;
       if (bad) continue;
       if (isBeamLit(x, y, 20)) continue;
     }
@@ -409,13 +412,13 @@ function isBeamLit(x, y, r) {
 function fireLit(x, y) {
   for (const f of G.fires) if (dist2(x, y, f.x, f.y) < 220 * 220) return true;
   for (const b of G.builds) if ((b.k === "light" && dist2(x, y, b.x, b.y) < 300 * 300) || (b.k === "stove" && dist2(x, y, b.x, b.y) < 160 * 160)) return true;
-  for (const l of World.lights) if (dist2(x, y, l.x, l.y) < (l.r * 0.75) ** 2) return true;
+  for (const l of World.lights) if (lightOn(l) && dist2(x, y, l.x, l.y) < (l.r * 0.75) ** 2) return true;
   return false;
 }
 function nearFire(x, y, r) {
   for (const f of G.fires) if (dist2(x, y, f.x, f.y) < r * r) return f;
   for (const b of G.builds) if ((b.k === "stove" || b.k === "light") && dist2(x, y, b.x, b.y) < (b.k === "light" ? r * 1.4 : r) ** 2) return b;
-  for (const l of World.lights) if (l.col.startsWith("255") && dist2(x, y, l.x, l.y) < r * r) return l;
+  for (const l of World.lights) if (l.col.startsWith("255") && lightOn(l) && dist2(x, y, l.x, l.y) < r * r) return l;
   return null;
 }
 
@@ -533,9 +536,14 @@ function updateMonsters(dt) {
     } else {
       // wander
       m.wT -= dt;
-      if (m.wT <= 0) { m.wT = 2 + Math.random() * 4; const a = Math.random() * 6.28; m.wx = m.x + Math.cos(a) * 200; m.wy = m.y + Math.sin(a) * 200; }
+      if (m.wT <= 0) {
+        m.wT = 2 + Math.random() * 4; const a = Math.random() * 6.28; m.wx = m.x + Math.cos(a) * 200; m.wy = m.y + Math.sin(a) * 200;
+        // a lit window or a humming generator: walk to the light
+        const lure = !m.fake && lureNear(m.x, m.y); m.lure = !!lure;
+        if (lure) { m.wx = lure.x + (Math.random() - 0.5) * 160; m.wy = lure.y + (Math.random() - 0.5) * 160; m.wT = 3; if (dist2(m.x, m.y, lure.x, lure.y) < 420 * 420 && d < 600) m.aggro = 5; }
+      }
       const wx = m.wx - m.x, wy = m.wy - m.y, wl = Math.hypot(wx, wy);
-      if (wl > 10) { mvx = wx / wl * 0.4; mvy = wy / wl * 0.4; m.a = Math.atan2(wy, wx); }
+      if (wl > 10) { const sp = m.lure ? 0.75 : 0.4; mvx = wx / wl * sp; mvy = wy / wl * sp; m.a = Math.atan2(wy, wx); }
     }
 
     m.kx *= Math.pow(0.02, dt); m.ky *= Math.pow(0.02, dt);
@@ -750,13 +758,15 @@ function interactLabel(o) {
     case "altar": return G.placed ? "Алтарь" : "Положить печати на алтарь";
     case "car": { const c = G.car; return c.trunk ? "Обыскать багажник" : !c.engine ? (G.inv.engine ? "Поставить двигатель" : "Машина: нет двигателя") : c.fuel < 1 ? (G.inv.fuel ? "Залить бензин" : "Машина: пустой бак") : "Сесть за руль"; }
   }
-  return "";
+  return homeLabel(o);
 }
+const HOME_TYPES = new Set(["switch", "generator", "fireplace", "sofa", "radio", "fridge", "medcab", "bookcase", "tv", "piano", "mirror"]);
 
 function isHoldAction(o) { return !!GATHER[o.type]; }
 
 function doInteract(o) {
   const p = G.p;
+  if (HOME_TYPES.has(o.type)) { homeUse(o); return; }
   switch (o.type) {
     case "note": UI.showNote(o.key); return;
     case "crate":
@@ -856,6 +866,7 @@ function newDay() {
   for (const o of World.res) if (o.regrow && o.regrow <= G.day) { o.left = o.max; o.regrow = 0; o.block = o.type !== "bush"; }
   World.dirty = true;
   for (const o of World.inter) if (o.type === "crate" && !o.full && Math.random() < 0.5) o.full = true;
+  refillHomes();
 }
 
 // --- crafting ------------------------------------------------------------------------
@@ -907,6 +918,24 @@ function useItem(k) {
   return true;
 }
 function quickHeal() { if (!useItem("medkit") && !(G.inv.medkit > 0)) useItem("bandage"); }
+
+// quick bar: any usable item or weapon from the bag, one tap to use
+const QUICK_N = 4, USABLE = ["bandage", "medkit", "tea", "battery"];
+function quickable(k) { return k.startsWith("w:") ? G.owned.includes(k.slice(2)) : USABLE.includes(k) || !!(ITEMS[k] && ITEMS[k].food); }
+function quickIcon(k) { return k.startsWith("w:") ? WICON[k.slice(2)] || "?" : ITEMS[k].icon; }
+function quickName(k) { return k.startsWith("w:") ? WEAPONS[W_IDX[k.slice(2)]].n : ITEMS[k].n; }
+function useQuick(i) {
+  const k = G.quick[i]; if (!k) return;
+  if (k.startsWith("w:")) { const j = G.owned.indexOf(k.slice(2)); if (j >= 0) switchWeapon(j); }
+  else if (!(G.inv[k] > 0)) { toast(`Нет: ${ITEMS[k].n}`, 1.2); Sound.click(); }
+  else useItem(k);
+}
+function toggleQuick(k) {
+  const i = G.quick.indexOf(k);
+  if (i >= 0) { G.quick[i] = null; return; }
+  let j = G.quick.indexOf(null); if (j < 0) j = QUICK_N - 1;
+  G.quick[j] = k;
+}
 
 // --- story ---------------------------------------------------------------------------
 
@@ -962,7 +991,29 @@ function segDist(px, py, x1, y1, x2, y2) { return distToSeg(px, py, x1, y1, x2, 
 
 function updateHazards(dt) {
   const p = G.p;
+  G.gasT = Math.max(0, (G.gasT || 0) - dt);
   for (const h of World.hazards) {
+    if (h.kind === "gas") {
+      if (dist2(p.x, p.y, h.x, h.y) < h.r * h.r) {
+        p.hp -= (h.mad ? 1.5 : 4) * dt; p.san = Math.max(0, p.san - (h.mad ? 9 : 4) * dt); G.gasT = 0.35;
+        tip("gas", h.mad ? "Этот воздух сводит с ума. Не задерживайся." : "Ядовитый газ! Проходи быстро.", "☣");
+        if (p.hp <= 0) { p.hp = 0; die(); return; }
+      }
+      continue;
+    }
+    if (h.kind === "rocks") {
+      if (!h.armed) continue;
+      if (h.t > 0) {
+        h.t -= dt;
+        if (Math.random() < 0.6) spark(h.x + (Math.random() - 0.5) * h.r, h.y + (Math.random() - 0.5) * h.r, "#8a7a60", 1, 30, 0.6, 2);
+        if (h.t <= 0) {
+          h.armed = false; Sound.thunder(0); G.shake = Math.max(G.shake, 16); makeNoise(h.x, h.y, 900);
+          if (dist2(p.x, p.y, h.x, h.y) < (h.r + 8) ** 2) { hurt(30); p.root = 1.2; toast("Обвал!", 1.5); }
+          for (const m of G.mons) if (!m.fake && m.type !== "boss" && dist2(m.x, m.y, h.x, h.y) < (h.r + m.r) ** 2) damage(m, 70);
+        }
+      } else if (dist2(p.x, p.y, h.x, h.y) < h.r * h.r) { h.t = 0.9; Sound.rattle(); tip("rocks", "Сыплется песок — сейчас обвал! Беги!", "⚠"); }
+      continue;
+    }
     if (h.kind === "spikes") {
       const t = (G.clock + h.ph) % 3.4;
       const prev = h.state;
@@ -1054,6 +1105,7 @@ function update(dt) {
   if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
   G.night = World.indoor ? 1 : nightFactor(G.t);
   G.clock = (G.clock || 0) + dt;
+  updatePower(dt);
 
   // weather: mostly clear and sunny by day; now and then fog rolls in or a thunderstorm comes
   G.stormT -= dt;
@@ -1204,7 +1256,7 @@ function update(dt) {
   if (G.objBanner) { G.objBanner.t -= dt; if (G.objBanner.t <= 0) G.objBanner = null; }
 
   // sanity
-  const lightHere = Math.max(1 - G.night, nearFire(p.x, p.y, 240) ? 1 : 0, World.lights.some(l => dist2(p.x, p.y, l.x, l.y) < l.r * l.r) ? 0.8 : 0, p.light && G.lightOff <= 0 ? 0.45 : 0);
+  const lightHere = Math.max(1 - G.night, nearFire(p.x, p.y, 240) ? 1 : 0, World.lights.some(l => lightOn(l) && dist2(p.x, p.y, l.x, l.y) < l.r * l.r) ? 0.8 : 0, p.light && G.lightOff <= 0 ? 0.45 : 0);
   let dsan = 0;
   if (lightHere < 0.3) dsan -= 1.1; else if (lightHere < 0.6) dsan -= 0.35 * G.night;
   if (nearFire(p.x, p.y, 240)) dsan += 2.2;

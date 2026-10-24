@@ -11,6 +11,42 @@ const V = {
   idx: {}, inst: {}, crates: [], seals: [], notes: [], pickups: [], mons: new Map(), dying: [], dyn: new Map(),
 };
 
+// wind: trees and grass sway, harder in a storm; water ripples share the clock
+const WIND = { time: { value: 0 }, str: { value: 1 } };
+function addWind(mat, k) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = WIND.time; sh.uniforms.uWind = WIND.str;
+    sh.vertexShader = "uniform float uTime;\nuniform float uWind;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+      {
+        float h = max(transformed.y, 0.0);
+        #ifdef USE_INSTANCING
+        vec2 wp = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
+        #else
+        vec2 wp = vec2(0.0);
+        #endif
+        float ph = wp.x * 0.004 + wp.y * 0.005;
+        float s = sin(uTime * 1.7 + ph) * 0.7 + sin(uTime * 3.3 + ph * 2.3) * 0.3;
+        transformed.x += s * h * ${k.toFixed(3)} * uWind;
+        transformed.z += cos(uTime * 1.3 + ph * 1.7) * h * ${(k * 0.6).toFixed(3)} * uWind;
+      }`);
+  };
+  mat.customProgramCacheKey = () => "wind" + k;
+}
+function addRipples(mat, speed) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = WIND.time;
+    sh.vertexShader = "varying vec3 vWP;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    sh.fragmentShader = "uniform float uTime;\nvarying vec3 vWP;\n" + sh.fragmentShader.replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+      {
+        vec2 q = vWP.xz; float t = uTime * ${speed.toFixed(2)};
+        float w2 = sin((q.x + q.y) * 0.09 + t * 2.2) * 0.05 + sin(q.x * 0.21 - t * 3.1) * 0.025;
+        vec3 n = vec3(cos(q.x * 0.035 + t * 1.3) * 0.12 + w2, 0.0, cos(q.y * 0.042 - t * 1.1) * 0.12 + w2);
+        normal = normalize(normal + (viewMatrix * vec4(n, 0.0)).xyz);
+      }`);
+  };
+  mat.customProgramCacheKey = () => "ripple" + speed;
+}
+
 const tmpO = new THREE.Object3D(), tmpC = new THREE.Color(), tmpC2 = new THREE.Color();
 const lam = (c, o = {}) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o));
 const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c, fog: false });
@@ -43,7 +79,8 @@ function initScene() {
   s.add(V.hemi);
   V.moon = new THREE.DirectionalLight(0x9fb0d8, 0.5);
   V.moon.position.set(-0.5, 1, -0.3);
-  s.add(V.moon);
+  s.add(V.moon); s.add(V.moon.target);
+  { const c = V.moon.shadow.camera; c.left = -850; c.right = 850; c.top = 850; c.bottom = -850; c.near = 10; c.far = 4000; V.moon.shadow.bias = -0.0006; V.moon.shadow.normalBias = 1.5; }
 
   const sp = V.spot = new THREE.SpotLight(0xfff0d2, 9, FLASH_RANGE * 1.2, FLASH_HALF * 1.05, 0.55, 0);
   sp.position.set(7, -6, 2);
@@ -91,6 +128,11 @@ function setQuality(q, initial) {
     if (sp.shadow.map) { sp.shadow.map.dispose(); sp.shadow.map = null; }
     sp.shadow.mapSize.set(Q.shadow, Q.shadow);
   }
+  // the sun casts shadows on the better settings (on phones only on "high")
+  const sunSh = q === "high" ? 2048 : q === "mid" && !V.mobile ? 1024 : 0;
+  V.sunShadow = sunSh > 0;
+  if (V.moon.shadow.map) { V.moon.shadow.map.dispose(); V.moon.shadow.map = null; }
+  if (sunSh) V.moon.shadow.mapSize.set(sunSh, sunSh);
   V.fogs.forEach((f, i) => f.visible = i < Q.fog);
   resize3d();
 }
@@ -502,6 +544,7 @@ function buildStatic() {
     const wp = list.map(sw => { const g = new THREE.CircleGeometry(sw.r, 20); g.rotateX(-Math.PI / 2); g.translate(sw.x, clear ? 0.7 : 0.6, sw.y); return { geo: g, c: "#ffffff" }; });
     const wm = new THREE.Mesh(mergeParts(wp), new THREE.MeshPhongMaterial(clear ? { color: 0x1c3a46, shininess: 120, specular: 0x8aa8b8 } : { color: 0x0a1412, shininess: 90, specular: 0x334440 }));
     wm.receiveShadow = true;
+    addRipples(wm.material, clear ? 1 : 0.4);
     s.add(wm);
     if (clear) V.waterMat = wm.material;
   }
@@ -727,6 +770,7 @@ function buildResources() {
       rock: lam(0x8a8880, { map: V.tex.stone, flatShading: true }), bush: lam(0xffffff, { flatShading: true }),
       wreck: lam(0xffffff, { vertexColors: true, map: V.tex.concrete }), scrap: lam(0xffffff, { vertexColors: true }), grass: lam(0xffffff, { vertexColors: true }), flower: lam(0xffffff, { vertexColors: true }),
     };
+    addWind(V.resMat.pine, 0.14); addWind(V.resMat.birch, 0.16); addWind(V.resMat.grass, 0.16); addWind(V.resMat.flower, 0.14); addWind(V.resMat.bush, 0.07);
   }
   const G3 = V.resGeo, M = V.resMat;
   const chunks = new Map();
@@ -1611,12 +1655,21 @@ function syncMonsters(dt) {
     const halo = m.lit && G.night < 0.4 ? 0.15 : 0.85;
     v.glows.forEach(s => s.material.opacity = halo * (0.8 + 0.2 * Math.sin(V.time * 6 + m.y)));
   }
-  for (const [m, v] of V.mons) if (!alive.has(m)) { V.mons.delete(m); V.dying.push({ v, t: m.fake ? 0.25 : 1.2, max: m.fake ? 0.25 : 1.2, fake: m.fake }); }
+  for (const [m, v] of V.mons) if (!alive.has(m)) { V.mons.delete(m); V.dying.push({ v, t: m.fake ? 0.25 : 12, max: m.fake ? 0.25 : 12, fake: m.fake, side: Math.random() < 0.5 ? 1 : -1, big: m.type === "brute" || m.type === "lord" }); }
+  if (V.dying.length > 14) { const old = V.dying.find(d => !d.fake && d.t > 1.5); if (old) old.t = 1.5; }
   V.dying = V.dying.filter(d => {
     d.t -= dt;
     const k = 1 - d.t / d.max;
     if (d.fake) d.v.g.scale.setScalar(1 + k * 0.6);
-    else { d.v.body.rotation.z = Math.min(1.5, k * 3); d.v.g.position.y = -k * 6; d.v.eyes.forEach(e => e.visible = false); d.v.glows.forEach(e => e.visible = false); if (d.v.jaw) d.v.jaw.rotation.z = -1; }
+    else {
+      // fall over with a small bounce, limbs go limp, lie still, then sink into the ground
+      const e = d.max - d.t, f = e < 0.45 ? Math.pow(e / 0.45, 2) : 1 + Math.sin(Math.min(1, (e - 0.45) / 0.25) * Math.PI) * 0.06;
+      d.v.body.rotation.z = 1.45 * f * d.side;
+      d.v.g.position.y = d.t < 2.5 ? -(2.5 - d.t) * (d.big ? 20 : 12) : 0;
+      if (e < 0.6) d.v.arms.forEach((a, i) => { a.rotation.z = lerp(a.rotation.z, (i ? 1 : -1) * 0.4 + 2.2, 0.15); });
+      d.v.eyes.forEach(o => o.visible = false); d.v.glows.forEach(o => o.visible = false); if (d.v.jaw) d.v.jaw.rotation.z = -1;
+      if (e > 0.42 && !d.thud) { d.thud = true; const p = d.v.g.position; G.shake = Math.max(G.shake, d.big ? 6 : 2); spark(p.x, p.z, "#3a2a1a", d.big ? 10 : 5, 90, 0.5, 3); }
+    }
     if (d.t <= 0) {
       V.scene.remove(d.v.g);
       d.v.g.traverse(o => {
@@ -1687,7 +1740,8 @@ function syncDynamic(dt) {
       continue;
     }
     if (q.z === undefined) { q.z = q.glow ? 6 + Math.random() * 10 : 20 + Math.random() * 30; q.vz = q.glow ? 40 + Math.random() * 40 : (Math.random() - 0.2) * 120; }
-    q.z += q.vz * dt; if (!q.glow) q.vz -= 300 * dt; if (q.z < 0.5) { q.z = 0.5; q.vz = 0; }
+    q.z += q.vz * dt; if (!q.glow) q.vz -= (q.bounce ? 520 : 300) * dt;
+    if (q.z < 0.5) { q.z = 0.5; if (q.bounce && q.vz < -45) { q.vz = -q.vz * 0.38; q.vx *= 0.6; q.vy *= 0.6; } else q.vz = 0; }
     tmpC.set(q.col);
     const k = q.life / q.max;
     if (q.glow) { if (ng >= 700) continue; Q.position.setXYZ(ng, q.x, q.z, q.y); Q.color.setXYZ(ng, tmpC.r * k, tmpC.g * k, tmpC.b * k); ng++; }
@@ -1804,7 +1858,41 @@ function syncLights(dt) {
   });
 }
 
+// fireflies over the grass at dusk and night, dust hanging in the air of rooms and tunnels
+function syncMotes(dt) {
+  const cam = V.camera, p = G.p;
+  if (!V.motes) {
+    const mk = (n, size, col) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      const m = new THREE.Points(g, new THREE.PointsMaterial({ size, map: V.tex.glow, vertexColors: true, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      m.frustumCulled = false; V.scene.add(m);
+      return { m, n, col, pts: Array.from({ length: n }, () => ({ x: 0, y: 0, z: 0, ph: Math.random() * 99, placed: false })) };
+    };
+    V.motes = { fly: mk(46, 7, [0.75, 1, 0.35]), dust: mk(70, 2.2, [0.5, 0.45, 0.38]) };
+  }
+  const night = G.night;
+  const flyOn = !World.indoor && !G.inside && night > 0.25 && (G.storm || 0) < 0.4, dustOn = World.indoor || !!G.inside;
+  for (const [key, on, R0, H0, H1] of [["fly", flyOn, 520, 6, 60], ["dust", dustOn, 170, 20, 110]]) {
+    const M = V.motes[key]; M.m.visible = on;
+    if (!on) { M.pts.forEach(q => q.placed = false); continue; }
+    const P = M.m.geometry.attributes.position, C = M.m.geometry.attributes.color;
+    M.pts.forEach((q, i) => {
+      if (!q.placed || dist2(q.x, q.y, p.x, p.y) > R0 * R0) { const a = Math.random() * 6.28, d = Math.random() * R0 * 0.95; q.x = p.x + Math.cos(a) * d; q.y = p.y + Math.sin(a) * d; q.z = H0 + Math.random() * (H1 - H0); q.placed = true; }
+      const t = V.time + q.ph;
+      const sp = key === "fly" ? 14 : 2.5;
+      q.x += Math.sin(t * 0.7) * sp * dt; q.y += Math.cos(t * 0.6 + 1) * sp * dt; q.z += Math.sin(t * 1.1) * sp * 0.4 * dt;
+      P.setXYZ(i, q.x, q.z, q.y);
+      const b = key === "fly" ? Math.max(0, Math.sin(t * 1.9)) ** 3 * Math.min(1, (night - 0.25) * 3) : 0.5 + 0.5 * Math.sin(t * 0.5);
+      C.setXYZ(i, M.col[0] * b, M.col[1] * b, M.col[2] * b);
+    });
+    P.needsUpdate = C.needsUpdate = true;
+  }
+}
+
 function syncAtmosphere(dt) {
+  syncMotes(dt);
   const cam = V.camera, p = G.p, n = G.night;
   V.sky.position.copy(cam.position); V.stars.position.copy(cam.position);
   V.sky.visible = V.stars.visible = V.moonDisc.visible = !World.indoor;
@@ -1827,6 +1915,11 @@ function syncAtmosphere(dt) {
   // rain
   const storm = G.storm || 0, R = V.rain;
   R.visible = storm > 0.05 && !G.inside && !World.indoor;
+  // drops splash on the ground around you
+  if (R.visible && G.state === "play") {
+    const ns = Math.min(8, Q.rain * storm * dt * 0.06 + Math.random());
+    for (let i = 0; i < ns; i++) { const a = Math.random() * 6.28, d = 30 + Math.random() * 320, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; G.parts.push({ x, y, vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.5) * 30, life: 0.22, max: 0.22, col: "#a8bccc", size: 1.6, z: 1, vz: 60 + Math.random() * 40 }); }
+  }
   if (R.visible) {
     const count = Math.floor(Q.rain * storm), P = R.geometry.attributes.position;
     for (let i = 0; i < count; i++) {
@@ -1855,11 +1948,17 @@ function syncCamera(dt) {
   } else {
     V.camA = null;
     cam.position.set(p.x + (Math.random() - 0.5) * sh, EYE + bob + (Math.random() - 0.5) * sh, p.y + (Math.random() - 0.5) * sh);
-    const cp = Math.cos(p.pitch || 0);
-    cam.lookAt(cam.position.x + Math.cos(p.a) * cp, cam.position.y + Math.sin(p.pitch || 0), cam.position.z + Math.sin(p.a) * cp);
+    if (G.recoil) { V.recoil = Math.max(V.recoil || 0, G.recoil); G.recoil = 0; }
+    V.recoil = Math.max(0, (V.recoil || 0) - dt * 5);
+    const pitch = (p.pitch || 0) + V.recoil * 0.07, cp = Math.cos(pitch);
+    cam.lookAt(cam.position.x + Math.cos(p.a) * cp, cam.position.y + Math.sin(pitch), cam.position.z + Math.sin(p.a) * cp);
+    // the view widens a touch while sprinting and kicks on a shot
+    const fov0 = innerWidth / innerHeight < 1 ? 92 : 72, fov = fov0 + (G.input.sprint && moving ? 5 : 0) + V.recoil * 3 + (G.lordHunt ? 3 + Math.sin(V.time * 12) * 0.8 : 0);
+    if (Math.abs(cam.fov - fov) > 0.05) { cam.fov = lerp(cam.fov, fov, Math.min(1, dt * 8)); cam.updateProjectionMatrix(); }
   }
   const wob = p.san < 30 ? Math.sin(V.time * 0.9) * (30 - p.san) * 0.004 : 0;
-  cam.rotateZ(wob + Math.sin(V.bobT * 0.5) * (moving ? 0.006 : 0));
+  // a hit jolts the head sideways
+  cam.rotateZ(wob + Math.sin(V.bobT * 0.5) * (moving ? 0.006 : 0) + (G.hurtFlash || 0) * 0.09 * Math.sin(V.time * 37));
 
   // the flashlight trails a little behind fast turns
   const da = dt > 0 ? angDiff(V.prevA == null ? p.a : V.prevA, p.a) / dt : 0, dp = dt > 0 ? ((p.pitch || 0) - (V.prevP || 0)) / dt : 0;
@@ -1896,6 +1995,13 @@ function syncCamera(dt) {
 
 function render3d(dt) {
   V.time += dt;
+  WIND.time.value = V.time; WIND.str.value = lerp(WIND.str.value, 1 + (G.storm || 0) * 1.6, Math.min(1, dt));
+  // the sun's shadow box follows you, snapped to a grid so the edges do not shimmer
+  V.moon.castShadow = !!V.sunShadow && !World.indoor && G.night < 0.85;
+  if (V.moon.castShadow) {
+    const sx = Math.round(G.p.x / 64) * 64, sz = Math.round(G.p.y / 64) * 64;
+    V.moon.target.position.set(sx, 0, sz); V.moon.position.set(sx - 900, 1800, sz - 540);
+  } else { V.moon.target.position.set(0, 0, 0); V.moon.position.set(-0.5, 1, -0.3); }
   if (V.builtMap !== World.map) rebuildWorld3d();
   if (World.dirty) syncResources();
   syncCamera(dt);

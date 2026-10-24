@@ -95,7 +95,7 @@ function lordAI(m, dt, d, dx, dy) {
   m.step += moved * 0.06;
   // heavy steps you hear before you see it
   m.stepT -= moved;
-  if (m.stepT <= 0 && d < 1300) { m.stepT = 90; Sound.lordStep(clamp(0.5 - d / 2600, 0.06, 0.5)); if (d < 600) G.shake = Math.max(G.shake, 3); }
+  if (m.stepT <= 0 && d < 1300) { m.stepT = 90; Sound.at(m.x, m.y, () => Sound.lordStep(0.7), !m.los); if (d < 600) G.shake = Math.max(G.shake, 3); }
   m.growlT -= dt;
   if (m.growlT <= 0 && d < 1500 && m.state !== "hunt") { m.growlT = 9 + Math.random() * 10; Sound.growl(0.3, clamp(0.3 - d / 3000, 0.04, 0.3)); }
 }

@@ -268,6 +268,9 @@ function attack() {
     return;
   }
   w.id === "shotgun" ? Sound.shotgun() : Sound.shot();
+  Sound.casing(); G.recoil = w.id === "shotgun" ? 1 : 0.5;
+  // a hot casing flies out to the right and bounces
+  { const ea = p.a + 1.5 + (Math.random() - 0.5) * 0.4; G.parts.push({ x: p.x + Math.cos(p.a) * 14 + Math.cos(p.a + 1.57) * 8, y: p.y + Math.sin(p.a) * 14 + Math.sin(p.a + 1.57) * 8, vx: Math.cos(ea) * 110, vy: Math.sin(ea) * 110, life: 2.5, max: 2.5, col: w.id === "shotgun" ? "#b02818" : "#c8a040", size: 2.2, z: 52, vz: 90, bounce: true }); }
   makeNoise(p.x, p.y, w.noise);
   G.flash = 0.07; G.shake = Math.max(G.shake, w.id === "shotgun" ? 9 : 4);
   const bl = nearBlockers(p.x, p.y, w.range);
@@ -387,7 +390,7 @@ function damage(m, dmg, kx = 0, ky = 0, fire = false) {
   m.aggro = 10; m.state = "chase";
   const kbm = m.type === "boss" ? 0.04 : m.type === "brute" ? 0.3 : 1;
   m.kx += kx * kbm; m.ky += ky * kbm;
-  if (!fire) blood(m.x, m.y, 5, m.type === "stalker" ? "#141418" : m.type === "spitter" ? "#3d4a12" : "#5a0c0c");
+  if (!fire) { blood(m.x, m.y, 5, m.type === "stalker" ? "#141418" : m.type === "spitter" ? "#3d4a12" : "#5a0c0c"); Sound.at(m.x, m.y, Sound.flesh); }
   if (m.hp <= 0) kill(m);
 }
 
@@ -401,7 +404,7 @@ function kill(m) {
   m.dead = true;
   const d = MONSTERS[m.type];
   for (let i = 0; i < 3; i++) blood(m.x, m.y, 8, m.type === "stalker" ? "#141418" : "#4a0909");
-  Sound.growl(m.type === "crawler" ? 1.8 : m.type === "brute" ? 0.6 : 1.1, 0.25);
+  Sound.at(m.x, m.y, () => { Sound.growl(m.type === "crawler" ? 1.8 : m.type === "brute" ? 0.6 : 1.1, 0.3); Sound.body(); });
   for (const k in d.drop) if (Math.random() < d.drop[k]) G.drops.push({ x: m.x + (Math.random() - 0.5) * 20, y: m.y + (Math.random() - 0.5) * 20, item: k, q: 1, t: 120 });
   if (Math.random() < 0.18) G.drops.push({ x: m.x, y: m.y, item: Math.random() < 0.6 ? "ammo9" : "shells", q: Math.random() < 0.6 ? 3 : 2, t: 120 });
   if (m.type === "boss") bossDefeated();
@@ -428,6 +431,15 @@ function nearFire(x, y, r) {
   for (const b of G.builds) if ((b.k === "stove" || b.k === "light") && dist2(x, y, b.x, b.y) < (b.k === "light" ? r * 1.4 : r) ** 2) return b;
   for (const l of World.lights) if (l.col.startsWith("255") && lightOn(l) && dist2(x, y, l.x, l.y) < r * r) return l;
   return null;
+}
+
+// what the ground under your feet sounds like
+function surfaceAt(x, y) {
+  if (World.indoor) return inSwamp(x, y) ? "water" : ["bunker", "hospital", "sewer"].includes(World.map) ? "metal" : "stone";
+  if (insideHouse(x, y)) return "wood";
+  if (inSwamp(x, y)) return "water";
+  if (distToRoad(x, y) < 40) return "road";
+  return "grass";
 }
 
 function hurt(dmg, src) {
@@ -480,7 +492,7 @@ function updateMonsters(dt) {
     m.state = m.aggro > 0 ? "chase" : "wander";
     if (m.state === "chase" && !m.spotted) {
       m.spotted = true;
-      if (!m.fake && d < 650 && G.spotCd <= 0) { G.spotCd = 2.5; m.type === "stalker" ? Sound.whisper() : Sound.screech(m.type === "crawler" ? 1.5 : m.type === "brute" ? 0.6 : m.type === "boss" ? 0.45 : m.type === "spitter" ? 1.2 : 1, clamp(0.5 - d / 1600, 0.12, 0.5)); }
+      if (!m.fake && d < 650 && G.spotCd <= 0) { G.spotCd = 2.5; Sound.at(m.x, m.y, () => m.type === "stalker" ? Sound.whisper() : Sound.screech(m.type === "crawler" ? 1.5 : m.type === "brute" ? 0.6 : m.type === "boss" ? 0.45 : m.type === "spitter" ? 1.2 : 1, 0.5), !m.los); }
     }
 
     // growls
@@ -488,7 +500,7 @@ function updateMonsters(dt) {
     if (m.growlT <= 0 && d < 700) {
       m.growlT = 5 + Math.random() * 9;
       if (m.type === "stalker") { if (Math.random() < 0.4) Sound.whisper(); }
-      else if (!m.fake) Sound.growl(m.type === "crawler" ? 1.7 : m.type === "brute" ? 0.55 : m.type === "boss" ? 0.4 : m.type === "spitter" ? 1.3 : 1, clamp(0.35 - d / 2500, 0.05, 0.35));
+      else if (!m.fake) Sound.at(m.x, m.y, () => Sound.growl(m.type === "crawler" ? 1.7 : m.type === "brute" ? 0.55 : m.type === "boss" ? 0.4 : m.type === "spitter" ? 1.3 : 1, 0.4), !m.los);
     }
 
     let spd = def.speed * (m.fake ? 1.1 : 1), mvx = 0, mvy = 0;
@@ -566,6 +578,9 @@ function updateMonsters(dt) {
       if (m.bT <= 0) { m.bT = def.acd; m.wind = 0.3; damageBuild(m.hitBuild.build, def.dmg * (m.type === "brute" ? 2 : 1)); }
     }
     m.step += Math.hypot(m.x - ox, m.y - oy) * 0.08;
+    // footsteps you can place in the dark
+    const sn = Math.floor(m.step / Math.PI);
+    if (sn !== m.stepN) { m.stepN = sn; if (d < 650 && !m.fake) Sound.at(m.x, m.y, () => Sound.mstep(m.type), !m.los); }
 
     // traps
     if (m.type !== "boss") for (const t of G.traps) {
@@ -1120,6 +1135,10 @@ function update(dt) {
   if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
   G.night = World.indoor ? 1 : nightFactor(G.t);
   G.clock = (G.clock || 0) + dt;
+  Sound.listener(p.x, p.y, p.a);
+  Sound.setEnv(World.indoor ? 0.55 : G.inside ? 0.26 : 0.06);
+  Sound.ambience(dt, { night: G.night, dungeon: World.indoor, house: !!G.inside, rain: G.storm || 0 });
+  Sound.hunt = !!G.lordHunt;
   updatePower(dt);
   ensureLord(dt);
   updateLordFx(dt);
@@ -1174,7 +1193,9 @@ function update(dt) {
   p.x += mx * spd * dt; p.y += my * spd * dt;
   collide(p);
   p.vx = (p.x - ox) / dt; p.vy = (p.y - oy) / dt;
-  if (p.moving) { p.stepT -= dt * spd / 150; if (p.stepT <= 0) { p.stepT = 0.38; Sound.step(); } }
+  if (p.moving) { p.stepT -= dt * spd / 150; if (p.stepT <= 0) { p.stepT = 0.38; Sound.stepOn(surfaceAt(p.x, p.y), spd > 200); } }
+  // out of breath
+  if (p.sta < 30 && (G.input.sprint || p.staLock > 0)) { G.pantT = (G.pantT || 0) - dt; if (G.pantT <= 0) { G.pantT = 0.9; Sound.pant(); } }
   }
   if (!G.drive) Sound.engine(0, 0);
 

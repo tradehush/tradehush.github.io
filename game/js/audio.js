@@ -3,6 +3,7 @@
 
 const Sound = (() => {
   let ctx = null, master = null, amb = null, ambGain = null, windGain = null, noiseBuf = null;
+  let cur = null, out0 = null, wet = null, tension = null, lis = { x: 0, y: 0, a: 0 };
   let muted = false;
   try { muted = localStorage.getItem("bp.muted") === "1"; } catch (e) {}
 
@@ -11,10 +12,20 @@ const Sound = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value = muted ? 0 : 0.7; master.connect(ctx.destination);
+    // master -> dry out, and a send into a long synthetic reverb (rooms and tunnels ring)
+    out0 = ctx.createGain(); out0.gain.value = 1; out0.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = muted ? 0 : 0.7; master.connect(out0);
+    cur = master;
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    try {
+      const len = Math.floor(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) { const ch = ir.getChannelData(c); for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+      const conv = ctx.createConvolver(); conv.buffer = ir;
+      wet = ctx.createGain(); wet.gain.value = 0.08;
+      master.connect(wet); wet.connect(conv); conv.connect(out0);
+    } catch (e) { wet = null; }
     startAmbient();
   }
 
@@ -23,7 +34,20 @@ const Sound = (() => {
     const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(master);
     return p;
   }
-  function noise(dur, { type = "lowpass", freq = 1000, q = 1, vol = 0.5, attack = 0.005, freqEnd = null, out = master, when = 0 } = {}) {
+  // a sound somewhere in the world: panned by direction, quieter and duller with distance, muffled behind walls
+  function spatial(x, y, muffled) {
+    if (!ctx) return master;
+    const dx = x - lis.x, dy = y - lis.y, d = Math.hypot(dx, dy);
+    const rel = Math.atan2(dy, dx) - lis.a, pan = Math.sin(rel);
+    const g = ctx.createGain(); g.gain.value = Math.max(0, Math.min(1, 1.15 - d / 1500)) * (Math.cos(rel) < -0.2 ? 0.85 : 1);
+    const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = Math.max(350, 9000 - d * 6) * (muffled ? 0.25 : 1);
+    let last = g;
+    g.connect(f); last = f;
+    if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-0.9, Math.min(0.9, pan)); f.connect(p); last = p; }
+    last.connect(master);
+    return g;
+  }
+  function noise(dur, { type = "lowpass", freq = 1000, q = 1, vol = 0.5, attack = 0.005, freqEnd = null, out = cur, when = 0 } = {}) {
     if (!ctx) return;
     const t = ctx.currentTime + when;
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
@@ -35,7 +59,7 @@ const Sound = (() => {
     src.start(t, Math.random()); src.stop(t + dur + 0.05);
   }
 
-  function tone(freq, dur, { type = "sine", vol = 0.3, freqEnd = null, attack = 0.005, out = master, when = 0 } = {}) {
+  function tone(freq, dur, { type = "sine", vol = 0.3, freqEnd = null, attack = 0.005, out = cur, when = 0 } = {}) {
     if (!ctx) return;
     const t = ctx.currentTime + when;
     const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
@@ -61,6 +85,39 @@ const Sound = (() => {
     const wl = ctx.createOscillator(); wl.frequency.value = 0.11;
     const wlg = ctx.createGain(); wlg.gain.value = 250; wl.connect(wlg); wlg.connect(wf.frequency); wl.start();
     ws.connect(wf); wf.connect(windGain); ws.start();
+    // tension: two detuned strings that tremble when something hunts you
+    tension = ctx.createGain(); tension.gain.value = 0; tension.connect(amb);
+    const tm = ctx.createGain(); tm.gain.value = 0.5; tm.connect(tension);
+    const tf = ctx.createBiquadFilter(); tf.type = "bandpass"; tf.frequency.value = 900; tf.Q.value = 0.8; tf.connect(tm);
+    [233.1, 246.9, 349.2].forEach(f => { const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; const og = ctx.createGain(); og.gain.value = 0.25; o.connect(og); og.connect(tf); o.start(); });
+    const trem = ctx.createOscillator(); trem.frequency.value = 7; const tg = ctx.createGain(); tg.gain.value = 0.5; trem.connect(tg); tg.connect(tm.gain); trem.start();
+  }
+
+  // the world around you: birds by day, crickets and owls at night, drips and groans underground
+  let ambT = { bird: 3, cricket: 1, owl: 20, howl: 45, snap: 25, creak: 14, drip: 1, groan: 20, house: 12 };
+  function ambience(dt, o) {
+    if (!ctx || muted) return;
+    for (const k in ambT) ambT[k] -= dt;
+    const pan = () => Math.random() * 1.6 - 0.8;
+    if (o.dungeon) {
+      if (ambT.drip <= 0) { ambT.drip = 0.8 + Math.random() * 2.5; const out = panned(pan()), f = 1100 + Math.random() * 1400; tone(f, 0.18, { vol: 0.06, freqEnd: f * 0.6, out }); }
+      if (ambT.groan <= 0) { ambT.groan = 16 + Math.random() * 22; const out = panned(pan()); tone(70 + Math.random() * 30, 3, { type: "sawtooth", vol: 0.05, freqEnd: 45, attack: 0.8, out }); noise(2.5, { type: "bandpass", freq: 500, q: 6, vol: 0.06, attack: 0.6, out }); }
+      return;
+    }
+    if (o.house && ambT.house <= 0) { ambT.house = 10 + Math.random() * 18; const out = panned(pan()); tone(180 + Math.random() * 120, 0.5, { type: "sawtooth", vol: 0.035, freqEnd: 140, attack: 0.1, out }); }
+    if (o.rain > 0.5) return;
+    if (o.night < 0.5) {
+      if (ambT.bird <= 0) {
+        ambT.bird = 2 + Math.random() * 6; const out = panned(pan()), base = 2200 + Math.random() * 1800, n = 2 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < n; i++) tone(base * (0.9 + Math.random() * 0.25), 0.09, { vol: 0.03 * (1 - o.night), freqEnd: base * (1.2 + Math.random() * 0.3), out, when: i * 0.13 });
+      }
+    } else {
+      if (ambT.cricket <= 0) { ambT.cricket = 0.35 + Math.random() * 0.5; const out = panned(pan()); for (let i = 0; i < 3; i++) tone(4300 + Math.random() * 300, 0.03, { type: "square", vol: 0.008, out, when: i * 0.05 }); }
+      if (ambT.owl <= 0) { ambT.owl = 18 + Math.random() * 25; const out = panned(pan()); tone(380, 0.35, { vol: 0.05, freqEnd: 330, attack: 0.05, out }); tone(380, 0.6, { vol: 0.05, freqEnd: 300, attack: 0.08, out, when: 0.5 }); }
+      if (ambT.howl <= 0) { ambT.howl = 40 + Math.random() * 50; const out = panned(pan()); tone(420, 3.2, { type: "triangle", vol: 0.035, freqEnd: 300, attack: 0.9, out }); tone(560, 2.6, { type: "triangle", vol: 0.02, freqEnd: 380, attack: 1, out, when: 0.3 }); }
+    }
+    if (ambT.snap <= 0) { ambT.snap = 18 + Math.random() * 30 - o.night * 8; const out = panned(pan()); noise(0.05, { type: "highpass", freq: 2500, vol: 0.18 + o.night * 0.15, out, attack: 0.001 }); noise(0.1, { type: "bandpass", freq: 800, q: 4, vol: 0.12, out, when: 0.02 }); }
+    if (ambT.creak <= 0) { ambT.creak = 12 + Math.random() * 18; const out = panned(pan()), f = 90 + Math.random() * 60; tone(f, 1.6, { type: "sawtooth", vol: 0.03, freqEnd: f * 1.4, attack: 0.4, out }); }
   }
 
   let beatT = 0, rainGain = null, eng = null;
@@ -79,6 +136,7 @@ const Sound = (() => {
       const t = ctx.currentTime;
       amb.gain.setTargetAtTime(active ? 1 : 0.3, t, 0.5);
       ambGain.gain.setTargetAtTime(0.06 + night * 0.12 + fear * 0.1, t, 1);
+      if (tension) tension.gain.setTargetAtTime(active ? Math.max(0, fear - 0.3) * 0.12 + (this.hunt ? 0.1 : 0) : 0, t, 0.6);
       windGain.gain.setTargetAtTime(0.1 + night * 0.12, t, 1);
       if (active && fear > 0.35) {
         beatT -= dt;
@@ -89,6 +147,32 @@ const Sound = (() => {
         }
       }
     },
+    hunt: false,
+    // where the listener stands, and how much rooms ring
+    listener(x, y, a) { lis.x = x; lis.y = y; lis.a = a; },
+    setEnv(w) { if (wet) wet.gain.setTargetAtTime(w, ctx.currentTime, 0.4); },
+    ambience,
+    // play any of these sounds from a point in the world
+    at(x, y, fn, muffled = false) { if (!ctx) return; cur = spatial(x, y, muffled); try { fn(); } finally { cur = master; } },
+    stepOn(kind, run) {
+      const v = run ? 1.4 : 1;
+      if (kind === "wood") { noise(0.07, { type: "bandpass", freq: 260, q: 3, vol: 0.12 * v }); tone(120, 0.06, { vol: 0.05 * v, freqEnd: 80 }); if (Math.random() < 0.12) tone(240 + Math.random() * 80, 0.25, { type: "sawtooth", vol: 0.02, freqEnd: 200, attack: 0.05 }); }
+      else if (kind === "stone") { noise(0.05, { type: "bandpass", freq: 1400, q: 2, vol: 0.09 * v }); noise(0.04, { type: "lowpass", freq: 300, vol: 0.06 * v }); }
+      else if (kind === "metal") { noise(0.05, { type: "bandpass", freq: 900, q: 6, vol: 0.08 * v }); tone(420 + Math.random() * 60, 0.12, { type: "triangle", vol: 0.025 * v }); }
+      else if (kind === "water") { noise(0.18, { type: "bandpass", freq: 900, q: 1.2, vol: 0.13 * v, attack: 0.02, freqEnd: 400 }); noise(0.1, { type: "highpass", freq: 3000, vol: 0.04 * v, when: 0.05 }); }
+      else if (kind === "road") { noise(0.07, { type: "bandpass", freq: 2200, q: 0.8, vol: 0.07 * v }); noise(0.05, { type: "lowpass", freq: 400, vol: 0.05 * v }); }
+      else { noise(0.08, { type: "bandpass", freq: 1500 + Math.random() * 600, q: 0.7, vol: 0.05 * v, attack: 0.01 }); noise(0.05, { type: "lowpass", freq: 300, vol: 0.05 * v }); }
+    },
+    mstep(type) {
+      if (type === "crawler") { for (let i = 0; i < 3; i++) noise(0.03, { type: "highpass", freq: 2200, vol: 0.12, when: i * 0.05 }); }
+      else if (type === "brute") { tone(60, 0.25, { vol: 0.35, freqEnd: 35 }); noise(0.15, { type: "lowpass", freq: 250, vol: 0.3 }); }
+      else if (type === "stalker") { noise(0.12, { type: "bandpass", freq: 600, q: 2, vol: 0.05, attack: 0.04 }); }
+      else { noise(0.12, { type: "lowpass", freq: 500, vol: 0.14, attack: 0.02 }); noise(0.08, { type: "bandpass", freq: 1200, q: 2, vol: 0.05, when: 0.05 }); }
+    },
+    flesh() { noise(0.14, { type: "lowpass", freq: 700, vol: 0.45, attack: 0.002 }); noise(0.1, { type: "bandpass", freq: 1600, q: 3, vol: 0.18, when: 0.02 }); tone(90, 0.1, { vol: 0.2, freqEnd: 50 }); },
+    casing() { for (let i = 0; i < 3; i++) tone(3200 + Math.random() * 1200, 0.05, { type: "triangle", vol: 0.05 / (i + 1), when: 0.35 + i * 0.09 }); },
+    pant() { noise(0.35, { type: "bandpass", freq: 900, q: 1.2, vol: 0.07, attack: 0.08 }); noise(0.3, { type: "bandpass", freq: 650, q: 1.2, vol: 0.05, attack: 0.05, when: 0.42 }); },
+    body() { tone(55, 0.3, { vol: 0.35, freqEnd: 30 }); noise(0.25, { type: "lowpass", freq: 400, vol: 0.35 }); },
     swing() { noise(0.12, { type: "highpass", freq: 1800, freqEnd: 600, vol: 0.18, attack: 0.03 }); },
     hit() { noise(0.15, { type: "lowpass", freq: 900, vol: 0.5 }); tone(110, 0.12, { type: "square", vol: 0.12, freqEnd: 50 }); },
     chop() { noise(0.09, { type: "bandpass", freq: 700, q: 3, vol: 0.5 }); tone(180, 0.08, { type: "triangle", vol: 0.2, freqEnd: 90 }); },

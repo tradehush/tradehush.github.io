@@ -40,8 +40,23 @@ function renderHud(dt) {
   }
 }
 
+// film grain: a small noise tile drawn at a random offset every frame
+let GRAIN = null;
+function drawGrain(ctx, a) {
+  if (!GRAIN) {
+    const c = document.createElement("canvas"); c.width = c.height = 160;
+    const g = c.getContext("2d"), im = g.createImageData(160, 160);
+    for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+    g.putImageData(im, 0, 0); GRAIN = ctx.createPattern(c, "repeat");
+  }
+  ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = "overlay";
+  ctx.translate(-Math.random() * 160, -Math.random() * 160); ctx.fillStyle = GRAIN; ctx.fillRect(0, 0, R.W + 160, R.H + 160);
+  ctx.restore();
+}
+
 function drawScreenFx(ctx) {
   const p = G.p, W = R.W, H = R.H;
+  drawGrain(ctx, 0.05 + G.night * 0.05 + (1 - p.san / 100) * 0.08 + (G.lordHunt ? 0.08 : 0));
   if (G.gasT > 0) { ctx.fillStyle = `rgba(70,130,30,${0.22 * Math.min(1, G.gasT / 0.35)})`; ctx.fillRect(0, 0, W, H); }
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
   const sanK = 1 - p.san / 100;

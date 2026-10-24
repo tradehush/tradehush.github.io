@@ -336,22 +336,19 @@ function drawMap(ctx) {
     const known = G.discovered[h.id];
     ctx.fillStyle = known ? "#6a5238" : "#2a2a24";
     ctx.fillRect(ox + h.x * k, oy + h.y * k, h.w * k, h.h * k);
-    ctx.fillStyle = known ? "#d8c890" : "#666";
-    if (MV.z >= 2.5 || World.W <= 6000) ctx.fillText(known ? h.name : "?", ox + (h.x + h.w / 2) * k, oy + h.y * k - 8 * u);
   }
   const a = World.altar;
   if (a) {
     ctx.strokeStyle = G.discovered.altar ? "#a03020" : "#444"; ctx.lineWidth = 2 * u;
     ctx.beginPath(); ctx.arc(ox + a.x * k, oy + a.y * k, 190 * k, 0, 7); ctx.stroke();
-    ctx.fillStyle = G.discovered.altar ? "#d8c890" : "#666"; ctx.fillText(G.discovered.altar ? "Капище" : "?", ox + a.x * k, oy + (a.y - 220) * k);
   }
   if (World.dungeon) {
     const D = World.dungeon;
     ctx.fillStyle = "#4a4236";
     for (let y = 0; y < D.ROWS; y++) for (let x = 0; x < D.COLS; x++) if (D.floor[y * D.COLS + x]) ctx.fillRect(ox + (D.ox + x * D.T) * k, oy + (D.oy + y * D.T) * k, D.T * k + 0.5, D.T * k + 0.5);
   }
-  ctx.fillStyle = "#c8a860";
-  for (const e of World.exits) { ctx.beginPath(); ctx.arc(ox + e.x * k, oy + e.y * k, 4 * u, 0, 7); ctx.fill(); ctx.fillText(MAPS[e.to].n, ox + e.x * k, oy + e.y * k - 10 * u); }
+  // ways down: a ringed dot
+  for (const e of World.exits) { const ex = ox + e.x * k, ey = oy + e.y * k; ctx.fillStyle = "#c8a860"; ctx.beginPath(); ctx.arc(ex, ey, 4.5 * u, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 1.5 * u; ctx.stroke(); }
   const t = objectiveTarget();
   if (t) { ctx.fillStyle = "#e0b040"; ctx.beginPath(); ctx.arc(ox + t.x * k, oy + t.y * k, 5 * u + Math.sin(R.time * 5) * 2 * u, 0, 7); ctx.fill(); }
   ctx.font = `${14 * u}px serif`; ctx.textAlign = "center";
@@ -361,8 +358,39 @@ function drawMap(ctx) {
   ctx.font = `bold ${11 * u}px ui-monospace, monospace`;
   for (const f of G.fires) { ctx.fillStyle = "#ff8a20"; ctx.beginPath(); ctx.arc(ox + f.x * k, oy + f.y * k, 3 * u, 0, 7); ctx.fill(); }
   const p = G.p;
+  // names last, each in a free spot next to its place; a name that does not fit anywhere is left out,
+  // and nothing covers you, your base, the car, the drop or the target
+  const taken = [], L = (x, y, r) => taken.push({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
+  L(ox + p.x * k, oy + p.y * k, 14 * u);
+  for (const b of MV.btns) taken.push({ x: (b.x - 6) * u, y: (b.y - 6) * u, w: (b.s + 12) * u, h: (b.s + 12) * u });
+  if (t) L(ox + t.x * k, oy + t.y * k, 10 * u);
+  if (G.base && G.base.map === World.map) L(ox + G.base.x * k, oy + G.base.y * k - 5 * u, 11 * u);
+  if (carHere() && !G.drive) L(ox + G.car.x * k, oy + G.car.y * k - 5 * u, 11 * u);
+  if (G.drop && !G.drop.looted && World.map === "forest") L(ox + G.drop.x * k, oy + G.drop.y * k - 5 * u, 11 * u);
+  for (const e of World.exits) L(ox + e.x * k, oy + e.y * k, 6 * u);
+  const labels = World.exits.map(e => ({ text: MAPS[e.to].n, x: e.x, y: e.y, col: "#e8c870", gap: 8 }));
+  if (World.altar && G.discovered.altar) labels.push({ text: "Капище", x: World.altar.x, y: World.altar.y, col: "#e09080", gap: 8 });
+  if (MV.z >= 2 || World.W <= 6000) for (const h of World.houses) if (G.discovered[h.id] && (MV.z >= 4 || !h.id.startsWith("cabin") || World.W <= 6000)) labels.push({ text: h.name, x: h.x + h.w / 2, y: h.y + h.h / 2, col: "#d8c890", gap: Math.max(h.w, h.h) * k / 2 + 3 * u });
+  ctx.font = `bold ${10 * u}px ui-monospace, monospace`; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  const hit = (r) => taken.some(q => r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y);
+  for (const lb of labels) {
+    const cx = ox + lb.x * k, cy = oy + lb.y * k;
+    if (cx < -100 || cy < -40 || cx > W + 100 || cy > H + 40) continue;
+    const tw = ctx.measureText(lb.text).width + 8 * u, th = 14 * u, g = lb.gap;
+    const spots = [[cx, cy - g - th / 2], [cx, cy + g + th / 2], [cx + g + tw / 2, cy], [cx - g - tw / 2, cy]];
+    for (const [x, y] of spots) {
+      const r = { x: x - tw / 2, y: y - th / 2, w: tw, h: th };
+      if (r.x < Math.max(4 * u, ox) || r.y < Math.max(30 * u, oy) || r.x + r.w > Math.min(W - 4 * u, ox + size) || r.y + r.h > Math.min(H - 4 * u, oy + size) || hit(r)) continue;
+      taken.push({ x: r.x - 2 * u, y: r.y - 2 * u, w: r.w + 4 * u, h: r.h + 4 * u });
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = lb.col; ctx.fillText(lb.text, x, y + 0.5 * u);
+      break;
+    }
+  }
+  ctx.textBaseline = "alphabetic";
   ctx.save(); ctx.translate(ox + p.x * k, oy + p.y * k); ctx.rotate(p.a);
-  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(8 * u, 0); ctx.lineTo(-5 * u, -5 * u); ctx.lineTo(-5 * u, 5 * u); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5 * u;
+  ctx.beginPath(); ctx.moveTo(9 * u, 0); ctx.lineTo(-6 * u, -6 * u); ctx.lineTo(-6 * u, 6 * u); ctx.closePath(); ctx.stroke(); ctx.fill();
   ctx.restore();
   ctx.restore();
   // scale bar: 100 m = 4000 px

@@ -43,7 +43,7 @@ function drawScreenFx(ctx) {
   const p = G.p, W = R.W, H = R.H;
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
   const sanK = 1 - p.san / 100;
-  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, `rgba(0,0,0,${0.45 + sanK * 0.45})`);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, `rgba(0,0,0,${0.32 + sanK * 0.45})`);
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
   if (p.san < 40) {
     const a = (40 - p.san) / 40 * (0.18 + 0.1 * Math.sin(R.time * 2));
@@ -68,8 +68,8 @@ const WICON = { knife: "🔪", axe: "🪓", bat: "🏏", machete: "🗡", pistol
 
 // a small dial: amber for day, blue for night, a hand for the time, the time under it
 function drawClock(ctx, cx, cy, u) {
-  const r = 13 * u, h = G.t * 24;
-  ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(cx, cy, r + 3 * u, 0, 7); ctx.fill();
+  const r = 10 * u, h = G.t * 24;
+  ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(cx, cy, r + 3 * u, 0, 7); ctx.fill();
   const ang = hh => -Math.PI / 2 + (hh / 24) * Math.PI * 2 + Math.PI; // midnight at the bottom
   ctx.lineWidth = 4 * u;
   ctx.strokeStyle = "rgba(90,110,170,0.8)"; ctx.beginPath(); ctx.arc(cx, cy, r, ang(21.5), ang(28)); ctx.stroke();
@@ -78,11 +78,10 @@ function drawClock(ctx, cx, cy, u) {
   ctx.strokeStyle = "#efe6c8"; ctx.lineWidth = 2 * u; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * r * 0.85, cy + Math.sin(a) * r * 0.85); ctx.stroke();
   ctx.font = `${12 * u}px serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(G.night > 0.5 ? "☾" : "☀", cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-  ctx.font = `bold ${13 * u}px ui-monospace, Menlo, monospace`; ctx.fillStyle = G.night > 0.5 ? "#a8b8e8" : "#efe6c8";
-  ctx.fillText(clock(), cx, cy + r + 13 * u);
-  const toNight = h >= 6 && h < 21.5 ? 21.5 - h : 0, toDay = h < 6 ? 6 - h : h >= 21.5 ? 30 - h : 0;
-  ctx.font = `${10 * u}px ui-monospace, Menlo, monospace`; ctx.fillStyle = "rgba(230,225,210,0.6)";
-  ctx.fillText(World.indoor ? "под землёй" : toNight ? `ночь через ${Math.ceil(toNight)} ч` : `рассвет через ${Math.ceil(toDay)} ч`, cx, cy + r + 27 * u);
+  ctx.font = `bold ${10 * u}px ui-monospace, Menlo, monospace`; ctx.fillStyle = G.night > 0.5 ? "rgba(168,184,232,0.8)" : "rgba(239,230,200,0.75)";
+  ctx.fillText(clock(), cx, cy + r + 10 * u);
+  const toNight = h >= 6 && h < 21.5 ? 21.5 - h : 0;
+  if (!World.indoor && toNight > 0 && toNight < 1.5) { ctx.font = `${9 * u}px ui-monospace, Menlo, monospace`; ctx.fillStyle = Math.sin(R.time * 4) > 0 ? "#e08060" : "rgba(224,128,96,0.5)"; ctx.fillText("скоро ночь", cx, cy + r + 22 * u); }
   ctx.textAlign = "left";
 }
 
@@ -102,9 +101,8 @@ function drawHUD(ctx) {
 
   // vitals: icon + thin bar, nothing else
   // only what matters right now: full stamina and a full flashlight stay hidden
-  const vit = [["♥", p.hp, "#b52a2a"], ["◉", p.san, "#8a5ac0"], ["🍖", p.food, "#9a7a40"]];
-  if (p.sta < 99) vit.push(["⚡", p.sta, "#c8a43a"]);
-  if (p.bat < 99 || !p.light) vit.push(["🔦", p.bat, p.light ? "#e8e0a0" : "#6a6a5a"]);
+  // a bar shows up only when that stat drops; a healthy screen stays empty
+  const vit = [["♥", p.hp, "#b52a2a", 60], ["◉", p.san, "#8a5ac0", 60], ["🍖", p.food, "#9a7a40", 50], ["⚡", p.sta, "#c8a43a", 40], ["🔦", p.bat, "#e8e0a0", 30]].filter(v => v[1] < v[3]);
   let vy = pad + 2 * u;
   const bw = 58 * u, bh = 4 * u;
   for (const [ic, v, c] of vit) {
@@ -118,21 +116,21 @@ function drawHUD(ctx) {
   }
   ctx.globalAlpha = 1;
   if (Voice.on) {
-    font(10, ""); ctx.fillStyle = Voice.heardT > 0 ? "#ff6050" : "rgba(230,225,210,0.55)";
-    ctx.fillText("🎙" + (Voice.heardT > 0 ? " «" + Voice.heard.slice(0, 30) + "»" : ""), pad, vy + 2 * u);
+    // a small red dot while the game listens; what it heard flashes briefly
+    ctx.fillStyle = Voice.heardT > 0 ? "#ff6050" : "rgba(200,60,50,0.6)"; ctx.beginPath(); ctx.arc(W - pad - 50 * u, pad + 16 * u, 3 * u, 0, 7); ctx.fill();
+    if (Voice.heardT > 0) { font(10, ""); ctx.textAlign = "right"; ctx.fillStyle = "rgba(230,225,210,0.7)"; ctx.fillText("«" + Voice.heard.slice(0, 28) + "»", W - pad - 58 * u, pad + 16 * u); ctx.textAlign = "left"; }
     Voice.heardT -= 1 / 60;
   }
-  if (G.inv.battery) { font(10, ""); ctx.fillStyle = "rgba(230,225,210,0.6)"; ctx.fillText("+" + G.inv.battery, pad + 17 * u + bw + 4 * u, vy - 13 * u); }
 
   // time of day
   const ccx = touch ? W / 2 - 40 * u : W / 2;
-  drawClock(ctx, ccx, pad + 20 * u, u);
+  drawClock(ctx, ccx, pad + 12 * u, u);
 
   // where to go: a small arrow beside the clock
   const tgt = objectiveTarget();
   if (tgt && !G.showMap) {
     const dx = tgt.x - p.x, dy = tgt.y - p.y, d = Math.hypot(dx, dy), rel = angDiff(p.a, Math.atan2(dy, dx));
-    const ax = ccx + 48 * u, ay = pad + 20 * u;
+    const ax = ccx + 34 * u, ay = pad + 12 * u;
     ctx.save(); ctx.translate(ax, ay); ctx.rotate(rel - Math.PI / 2);
     ctx.fillStyle = Math.abs(rel) < 0.3 ? "rgba(232,214,150,0.95)" : "rgba(216,200,144,0.6)";
     ctx.beginPath(); ctx.moveTo(10 * u, 0); ctx.lineTo(-6 * u, -7 * u); ctx.lineTo(-2 * u, 0); ctx.lineTo(-6 * u, 7 * u); ctx.closePath(); ctx.fill();
@@ -150,26 +148,26 @@ function drawHUD(ctx) {
     ctx.textAlign = "left"; ctx.globalAlpha = 1;
   }
 
-  // weapons: icons with ammo
-  const slot = (touch ? 36 : 42) * u, gap = 4 * u, n = G.owned.length;
-  const hcx = touch && W / u > 600 ? (W - 230 * u) / 2 : W / 2;
-  const hx = hcx - (n * slot + (n - 1) * gap) / 2, hy = H - pad - slot;
-  R.hotbar = { x: hx / u, y: hy / u, slot: slot / u, gap: gap / u, n };
-  if (!G.drive && n > 1) G.owned.forEach((id, i) => {
-    const w = WEAPONS[W_IDX[id]], x = hx + i * (slot + gap), on = i === G.wi;
-    ctx.fillStyle = on ? "rgba(216,200,144,0.22)" : "rgba(0,0,0,0.45)"; ctx.fillRect(x, hy, slot, slot);
-    ctx.strokeStyle = on ? "#d8c890" : "rgba(255,255,255,0.08)"; ctx.lineWidth = 1.5 * u; ctx.strokeRect(x, hy, slot, slot);
-    ctx.font = `${slot * 0.45}px serif`; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText(WICON[id] || "?", x + slot / 2, hy + slot * 0.42);
-    if (w.ammo) { font(9); ctx.fillStyle = "#d8c890"; ctx.fillText(w.mag ? `${G.mag[id] || 0}/${G.inv[w.ammo] || 0}` : `${G.inv[w.ammo] || 0}`, x + slot / 2, hy + slot - 7 * u); }
-    ctx.textAlign = "left";
-  });
+  // weapon: just the one in hand, small; tap it to switch
+  const slot = (touch ? 34 : 34) * u, n = G.owned.length;
+  const hx = (touch && W / u > 600 ? (W - 230 * u) / 2 : W / 2) - slot / 2, hy = H - pad - slot;
+  R.hotbar = { x: hx / u, y: hy / u, slot: slot / u, gap: 0, n: 1, single: true };
+  if (!G.drive) {
+    const id = G.owned[G.wi], w = WEAPONS[W_IDX[id]];
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(hx + slot / 2, hy + slot / 2, slot / 2, 0, 7); ctx.fill();
+    ctx.font = `${slot * 0.5}px serif`; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText(WICON[id] || "?", hx + slot / 2, hy + slot / 2);
+    if (w.ammo) { font(9); ctx.fillStyle = "#d8c890"; ctx.fillText(w.mag ? `${G.mag[id] || 0}/${G.inv[w.ammo] || 0}` : `${G.inv[w.ammo] || 0}`, hx + slot / 2, hy - 6 * u); }
+    if (n > 1) { font(8, ""); ctx.fillStyle = "rgba(230,225,210,0.5)"; ctx.fillText(`${G.wi + 1}/${n}`, hx + slot + 10 * u, hy + slot / 2); }
+    ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  }
   if (p.reloadT > 0) { const k = 1 - p.reloadT / curW().reload; ctx.strokeStyle = "#d8c890"; ctx.lineWidth = 3 * u; ctx.beginPath(); ctx.arc(W / 2, H / 2, 14 * u, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
 
   // what you can do right here: an icon of the button and one verb
   if (G.target && !G.showMap) {
     const icon = touch ? "✋" : "E", t = interactLabel(G.target);
     font(12); const tw = ctx.measureText(t).width;
-    const y = hy - 26 * u, x0 = W / 2 - (tw + 30 * u) / 2;
+    const y = H * 0.62, x0 = W / 2 - (tw + 30 * u) / 2;
     iconCircle(ctx, x0 + 10 * u, y, 11 * u, icon, u);
     ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(x0 + 24 * u, y - 11 * u, tw + 12 * u, 22 * u);
     ctx.fillStyle = "#efe6c8"; font(12); ctx.fillText(t, x0 + 30 * u, y);
@@ -177,12 +175,12 @@ function drawHUD(ctx) {
   }
 
   // messages: short, small, under the clock
-  font(12);
+  font(11);
   ctx.textAlign = "center";
-  G.msgs.forEach((m, i) => {
+  G.msgs.slice(-2).forEach((m, i) => {
     ctx.globalAlpha = clamp(Math.min(m.t / 0.5, (m.max - m.t) / 0.2 + 0.2), 0, 1);
-    const y = pad + (G.objBanner ? 104 : 78) * u + i * 22 * u, tw = ctx.measureText(m.text).width + 20 * u;
-    ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(W / 2 - tw / 2, y - 10 * u, tw, 20 * u);
+    const y = pad + (G.objBanner ? 90 : 56) * u + i * 19 * u, tw = ctx.measureText(m.text).width + 16 * u;
+    ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(W / 2 - tw / 2, y - 9 * u, tw, 18 * u);
     ctx.fillStyle = "#efe6c8"; ctx.fillText(m.text, W / 2, y);
   });
   ctx.globalAlpha = 1; ctx.textAlign = "left";
@@ -224,11 +222,21 @@ function drawHUD(ctx) {
     ctx.fillStyle = "#8a1010"; ctx.fillRect(x, y, w * Math.max(0, b.hp) / b.max, 6 * u);
   }
 
+  // what you just picked up: tiny icons on the left, gone in a moment
+  if (G.feed && G.feed.length) {
+    font(11, "");
+    G.feed.forEach((f, i) => {
+      ctx.globalAlpha = clamp(f.t / 0.6, 0, 1) * 0.85;
+      ctx.fillStyle = "#efe6c8"; ctx.fillText(`${ITEMS[f.k].icon} +${f.q}`, pad, H * 0.45 + i * 16 * u);
+    });
+    ctx.globalAlpha = 1;
+  }
+
   // crosshair
   if (!G.showMap && !G.drive) {
     const mx = W / 2, my = H / 2;
-    ctx.strokeStyle = G.target ? "rgba(240,220,150,0.9)" : "rgba(230,220,190,0.4)"; ctx.lineWidth = 1.5 * u;
-    ctx.beginPath(); ctx.arc(mx, my, (G.target ? 8 : 5) * u, 0, 7); ctx.stroke();
+    ctx.fillStyle = G.target ? "rgba(240,220,150,0.9)" : "rgba(230,220,190,0.45)";
+    ctx.beginPath(); ctx.arc(mx, my, (G.target ? 2.5 : 1.6) * u, 0, 7); ctx.fill();
   }
 }
 

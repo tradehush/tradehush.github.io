@@ -329,8 +329,8 @@ function setupTouch() {
     $("#qmenu").hidden = true;
     const hb = R.hotbar;
     if (hb && e.clientY >= hb.y && e.clientY <= hb.y + hb.slot && e.clientX >= hb.x && e.clientX <= hb.x + hb.n * (hb.slot + hb.gap)) {
-      const i = Math.floor((e.clientX - hb.x) / (hb.slot + hb.gap));
-      if (i === G.wi) startReload(); else switchWeapon(i);
+      if (hb.single) cycleWeapon(1);
+      else { const i = Math.floor((e.clientX - hb.x) / (hb.slot + hb.gap)); if (i === G.wi) startReload(); else switchWeapon(i); }
       return;
     }
     if (e.clientX < innerWidth * 0.42 && Input.mvId == null) { Input.mvId = e.pointerId; Input.mvO = { x: e.clientX, y: e.clientY }; place(Input.mvO, e.clientX, e.clientY); }
@@ -477,7 +477,7 @@ function boot() {
       const hint = G.tip && TIP_BTN[G.tip.icon];
       for (const b of hintBtns) b.classList.toggle("hint", !!hint && b.id === hint);
       // labels under the buttons fade once the player knows them
-      touchRoot.classList.toggle("nolabels", Settings.labels === "off" || (Settings.labels !== "on" && (G.clock || 0) > 240));
+      touchRoot.classList.toggle("nolabels", Settings.labels === "off" || (Settings.labels !== "on" && (G.clock || 0) > 60));
     }
     render3d(running || G.state === "title" || G.state === "intro" ? dt : 0);
     renderHud(running ? dt : 0);
@@ -502,5 +502,8 @@ addEventListener("DOMContentLoaded", () => {
   if (b) b.onclick = () => { if (!installPrompt) return; installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; b.hidden = true; }); };
 });
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  addEventListener("load", () => { navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {}); });
+  addEventListener("load", () => { navigator.serviceWorker.register("sw.js", { scope: "./" }).then(r => r.update()).catch(() => {}); });
+  // when a new version takes over, reload once so the player sees it right away (not mid-game)
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && G.state !== "play" && !sessionStorage.getItem("bp.reloaded")) { try { sessionStorage.setItem("bp.reloaded", "1"); } catch (e) {} location.reload(); } });
 }

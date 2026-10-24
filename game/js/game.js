@@ -44,7 +44,12 @@ function toast(text, dur = 3.5) {
 
 function addItem(k, q = 1, silent = false) {
   G.inv[k] = (G.inv[k] || 0) + q;
-  if (!silent) toast(`+${q} ${ITEMS[k].n}`, 1.8);
+  // pickups go to a small feed in the corner instead of the middle of the screen
+  if (!silent) {
+    G.feed = G.feed || [];
+    const f = G.feed.find(x => x.k === k);
+    if (f) { f.q += q; f.t = 2.5; } else { G.feed.push({ k, q, t: 2.5 }); if (G.feed.length > 3) G.feed.shift(); }
+  }
 }
 function has(need) { for (const k in need) if ((G.inv[k] || 0) < need[k]) return false; return true; }
 function take(need) { for (const k in need) G.inv[k] -= need[k]; }
@@ -1074,7 +1079,7 @@ function update(dt) {
   // story: entering the forester's house
   G.inside = insideHouse(p.x, p.y);
   if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
-  for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; toast(h.name, 2.5); }
+  for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; }
   if (G.inside && !G.base && (G.clock || 0) > 20) tip("claim", "Любой дом можно сделать своей базой и укреплять. Открой стройку, когда стоишь внутри дома.", "🔨");
   if (World.altar && !G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
 
@@ -1230,6 +1235,7 @@ function update(dt) {
   for (const d of G.decals) d.a -= dt * 0.004;
   G.decals = G.decals.filter(d => d.a > 0);
   for (const m of G.msgs) m.t -= dt;
+  if (G.feed) { for (const f of G.feed) f.t -= dt; G.feed = G.feed.filter(f => f.t > 0); }
   G.msgs = G.msgs.filter(m => m.t > 0);
 
   if (G.endT > 0) { G.endT -= dt; if (G.endT <= 0) { G.state = "end"; UI.showEnd(p.san >= 30); try { localStorage.removeItem(SAVE_KEY); } catch (e) {} } }

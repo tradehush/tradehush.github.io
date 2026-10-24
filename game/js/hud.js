@@ -103,7 +103,7 @@ function drawHUD(ctx) {
   font(13, "bold");
   ctx.textAlign = narrow ? "left" : "right";
   ctx.fillStyle = G.night > 0.5 ? "#8a9ac8" : "#d8c890";
-  ctx.fillText(`${G.night > 0.5 ? "☾" : "☀"} День ${G.day} · ${clock()}`, narrow ? pad : W - pad, pad + (narrow ? 42 : 13) * u);
+  ctx.fillText(`${World.indoor ? "⛫" : G.night > 0.5 ? "☾" : "☀"} День ${G.day} · ${clock()} · ${MAPS[World.map].n}`, narrow ? pad : W - pad, pad + (narrow ? 42 : 13) * u);
   ctx.textAlign = "left";
 
   // objective compass: the arrow points where to go relative to the view
@@ -203,9 +203,18 @@ function drawMap(ctx) {
     ctx.fillText(known ? h.name : "?", ox + (h.x + h.w / 2) * k, oy + h.y * k - 8 * u);
   }
   const a = World.altar;
-  ctx.strokeStyle = G.discovered.altar ? "#a03020" : "#444"; ctx.lineWidth = 2 * u;
-  ctx.beginPath(); ctx.arc(ox + a.x * k, oy + a.y * k, 190 * k, 0, 7); ctx.stroke();
-  ctx.fillStyle = G.discovered.altar ? "#d8c890" : "#666"; ctx.fillText(G.discovered.altar ? "Капище" : "?", ox + a.x * k, oy + (a.y - 220) * k);
+  if (a) {
+    ctx.strokeStyle = G.discovered.altar ? "#a03020" : "#444"; ctx.lineWidth = 2 * u;
+    ctx.beginPath(); ctx.arc(ox + a.x * k, oy + a.y * k, 190 * k, 0, 7); ctx.stroke();
+    ctx.fillStyle = G.discovered.altar ? "#d8c890" : "#666"; ctx.fillText(G.discovered.altar ? "Капище" : "?", ox + a.x * k, oy + (a.y - 220) * k);
+  }
+  if (World.dungeon) {
+    const D = World.dungeon;
+    ctx.fillStyle = "#4a4236";
+    for (let y = 0; y < D.ROWS; y++) for (let x = 0; x < D.COLS; x++) if (D.floor[y * D.COLS + x]) ctx.fillRect(ox + (D.ox + x * D.T) * k, oy + (D.oy + y * D.T) * k, D.T * k + 0.5, D.T * k + 0.5);
+  }
+  ctx.fillStyle = "#c8a860";
+  for (const e of World.exits) { ctx.beginPath(); ctx.arc(ox + e.x * k, oy + e.y * k, 4 * u, 0, 7); ctx.fill(); ctx.fillText(MAPS[e.to].n, ox + e.x * k, oy + e.y * k - 10 * u); }
   const t = objectiveTarget();
   if (t) { ctx.fillStyle = "#e0b040"; ctx.beginPath(); ctx.arc(ox + t.x * k, oy + t.y * k, 5 * u + Math.sin(R.time * 5) * 2 * u, 0, 7); ctx.fill(); }
   for (const f of G.fires) { ctx.fillStyle = "#ff8a20"; ctx.beginPath(); ctx.arc(ox + f.x * k, oy + f.y * k, 3 * u, 0, 7); ctx.fill(); }
@@ -213,7 +222,7 @@ function drawMap(ctx) {
   ctx.save(); ctx.translate(ox + p.x * k, oy + p.y * k); ctx.rotate(p.a);
   ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(8 * u, 0); ctx.lineTo(-5 * u, -5 * u); ctx.lineTo(-5 * u, 5 * u); ctx.fill();
   ctx.restore();
-  ctx.fillStyle = "#d8c890"; ctx.fillText("КАРТА — нажми M / ✕, чтобы закрыть", W / 2, oy - 16 * u);
+  ctx.fillStyle = "#d8c890"; ctx.fillText(MAPS[World.map].n.toUpperCase() + " — нажми M / ✕, чтобы закрыть", W / 2, oy - 16 * u);
   ctx.textAlign = "left";
 }
 

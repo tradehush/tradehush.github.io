@@ -18,6 +18,11 @@ const Sound = (() => {
     startAmbient();
   }
 
+  function panned(pan) {
+    if (!ctx || !pan || !ctx.createStereoPanner) return master;
+    const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(master);
+    return p;
+  }
   function noise(dur, { type = "lowpass", freq = 1000, q = 1, vol = 0.5, attack = 0.005, freqEnd = null, out = master, when = 0 } = {}) {
     if (!ctx) return;
     const t = ctx.currentTime + when;
@@ -138,6 +143,24 @@ const Sound = (() => {
       }
       rainGain.gain.setTargetAtTime(level * 0.22, ctx.currentTime, 0.8);
     },
+    stepsBehind(pan = 0) {
+      const out = panned(pan);
+      for (let i = 0; i < 4; i++) noise(0.09, { type: "lowpass", freq: 500, vol: 0.16 + i * 0.03, out, when: i * 0.42 });
+    },
+    snap(pan = 0) { const out = panned(pan); noise(0.06, { type: "highpass", freq: 2500, vol: 0.5, out, attack: 0.001 }); noise(0.12, { type: "bandpass", freq: 900, q: 4, vol: 0.3, out, when: 0.02 }); },
+    farScream(pan = 0) {
+      const out = panned(pan);
+      tone(700, 1.6, { type: "sawtooth", vol: 0.05, freqEnd: 420, attack: 0.2, out });
+      tone(740, 1.6, { type: "sawtooth", vol: 0.04, freqEnd: 400, attack: 0.25, out });
+      noise(1.4, { type: "bandpass", freq: 1400, q: 5, vol: 0.06, attack: 0.3, out });
+    },
+    knock(pan = 0) { const out = panned(pan); for (let i = 0; i < 3; i++) { noise(0.08, { type: "lowpass", freq: 300, vol: 0.5, out, when: i * 0.3 }); tone(90, 0.1, { vol: 0.3, out, when: i * 0.3 }); } },
+    breath(pan = 0) { const out = panned(pan); for (let i = 0; i < 2; i++) { noise(0.9, { type: "bandpass", freq: 700, q: 1.5, vol: 0.14, attack: 0.5, out, when: i * 1.6 }); noise(0.7, { type: "bandpass", freq: 500, q: 1.5, vol: 0.1, attack: 0.1, out, when: i * 1.6 + 0.9 }); } },
+    radio() { noise(0.8, { type: "bandpass", freq: 2200, q: 0.7, vol: 0.18, attack: 0.01 }); tone(60, 0.6, { type: "square", vol: 0.04 }); },
+    rattle() { for (let i = 0; i < 5; i++) noise(0.04, { type: "highpass", freq: 3000, vol: 0.15, when: i * 0.09 }); },
+    spikes() { noise(0.2, { type: "highpass", freq: 1800, vol: 0.5, attack: 0.001 }); tone(400, 0.15, { type: "square", vol: 0.1, freqEnd: 200 }); },
+    trap() { noise(0.15, { type: "highpass", freq: 2000, vol: 0.8, attack: 0.001 }); tone(1600, 0.2, { type: "square", vol: 0.15, freqEnd: 900 }); },
+    twang() { tone(220, 0.4, { type: "triangle", vol: 0.25, freqEnd: 180 }); noise(0.25, { type: "highpass", freq: 3000, vol: 0.2, when: 0.05 }); },
     bossRoar() { tone(45, 2, { type: "sawtooth", vol: 0.5, freqEnd: 30, attack: 0.2 }); noise(2, { type: "lowpass", freq: 500, vol: 0.6, attack: 0.3 }); },
   };
 })();

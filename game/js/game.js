@@ -1,7 +1,7 @@
 "use strict";
 // Game state and simulation.
 
-const SAVE_KEY = "blackpine.save.v1";
+const SAVE_KEY = "blackpine.save.v2";
 const FLASH_RANGE = 440, FLASH_HALF = 0.5, FLASH_RAYS = 72, HALO_R = 85;
 
 const G = {
@@ -9,7 +9,7 @@ const G = {
   p: null, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
   inv: {}, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {},
   msgs: [], shake: 0, flash: 0, hurtFlash: 0, lightOff: 0, noise: null, spawnT: 5, flowT: 0, hallT: 15, whisperT: 20,
-  rays: [], night: 0, storm: 0, stormOn: false, stormT: 240, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 20, spotCd: 0, tips: [], tip: null,
+  rays: [], night: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 15, figT: 60, storm: 0, stormOn: false, stormT: 240, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 20, spotCd: 0, tips: [], tip: null,
   boss: null, endT: 0, bossDead: false, inside: null, swingT: 0,
   input: { up: 0, down: 0, left: 0, right: 0, sprint: false, attack: false, interact: false, mvX: 0, mvY: 0 },
 };
@@ -62,23 +62,42 @@ function clock() {
 
 function newGame() {
   G.seed = 1337;
-  generateWorld(G.seed);
+  generateWorld(G.seed, "forest");
   Object.assign(G, { t: 15 / 24, day: 1, step: 0, mons: [], projs: [], parts: [], decals: [], tracers: [], fires: [], traps: [], drops: [], roots: [],
     inv: { bandage: 1 }, owned: ["knife"], mag: {}, wi: 0, notes: [], seals: [], placed: false, discovered: {}, msgs: [],
-    boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0,
+    boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 20, figT: 70,
     storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
+}
+
+// what changes on a map (resources, crates, fires, traps) is kept per map while you are elsewhere
+function snapMap() {
+  const res = [];
+  World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
+  return { res, it: World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0)), hz: World.hazards.map(h => h.armed === false ? 1 : 0),
+    fires: G.fires, traps: G.traps, day: G.day };
+}
+function applyMap(m) {
+  if (!m) return;
+  for (const [i, left, regrow] of m.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; if (left <= 0 && World.res[i].type !== "tree" && World.res[i].type !== "bush") World.res[i].block = false; }
+  (m.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
+  (m.hz || []).forEach((f, i) => { if (f && World.hazards[i]) World.hazards[i].armed = false; });
+  G.fires = m.fires || []; G.traps = m.traps || [];
+  // days passed while away: things regrow and some crates fill up
+  for (let d = (m.day || G.day); d < G.day; d++) {
+    for (const o of World.res) if (o.regrow && o.regrow <= G.day) { o.left = o.max; o.regrow = 0; o.block = o.type !== "bush"; }
+    for (const o of World.inter) if (o.type === "crate" && !o.full && Math.random() < 0.5) o.full = true;
+  }
+  World.dirty = true;
 }
 
 function save() {
   try {
     const p = G.p;
-    const res = [];
-    World.res.forEach((o, i) => { if (o.left < o.max || o.regrow) res.push([i, o.left, o.regrow]); });
-    const it = World.inter.map(o => (o.full === false ? 1 : 0) | (o.taken ? 2 : 0));
-    const data = { v: 1, seed: G.seed, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, fires: G.fires, traps: G.traps,
-      p: { x: p.x, y: p.y, hp: p.hp, san: p.san, bat: p.bat, light: p.light }, res, it };
+    G.maps[World.map] = snapMap();
+    const data = { v: 2, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered,
+      p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, light: p.light } };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
   } catch (e) { return false; }
@@ -89,17 +108,51 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function load() {
   let d;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch (e) { d = null; }
-  if (!d || d.v !== 1) return false;
+  if (!d || d.v !== 2) return false;
   newGame();
-  generateWorld(d.seed); G.seed = d.seed;
+  G.seed = d.seed;
+  generateWorld(d.seed, d.map || "forest");
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], fires: d.fires || [], traps: d.traps || [] });
-  for (const [i, left, regrow] of d.res) if (World.res[i]) { World.res[i].left = left; World.res[i].regrow = regrow; }
-  (d.it || []).forEach((f, i) => { const o = World.inter[i]; if (!o) return; if (f & 1) o.full = false; if (f & 2) o.taken = true; });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {} });
+  applyMap(G.maps[World.map]);
   Object.assign(G.p, d.p);
-  World.dirty = true;
   G.p.light = true;
+  populateMap();
+  if (typeof rebuildWorld3d === "function") rebuildWorld3d();
   return true;
+}
+
+// move to another location through an exit
+function travel(to) {
+  const from = World.map;
+  G.maps[from] = snapMap();
+  G.state = "travel";
+  UI.fade(() => {
+    generateWorld(G.seed, to);
+    Object.assign(G, { mons: [], projs: [], drops: [], decals: [], roots: [], tracers: [], parts: [], watchers: [], figure: null, boss: G.bossDead ? null : G.boss, fires: [], traps: [] });
+    if (G.boss && !G.bossDead) G.boss = null;
+    applyMap(G.maps[to]);
+    const back = World.exits.find(e => e.to === from) || World.exits[0];
+    G.p.x = back ? back.ax : World.start.x; G.p.y = back ? back.ay : World.start.y;
+    if (back) G.p.a = Math.atan2(back.ay - back.y, back.ax - back.x);
+    G.p.pitch = 0;
+    populateMap();
+    rebuildWorld3d();
+    G.state = "play";
+    save();
+    toast(MAPS[to].n, 3.5);
+    if (World.indoor) tip("dungeon", "Подземелье. Здесь ловушки: шипы в полу, спрятанные капканы и растяжки. Свети под ноги. В конце — оружейный ящик.");
+    Sound.sting();
+  });
+}
+
+// dungeons start inhabited
+function populateMap() {
+  if (!World.indoor) return;
+  for (const r of World.rooms.slice(1)) {
+    if (Math.random() < 0.55) { const m = spawnMonster(pickType(), r.cx + (Math.random() - 0.5) * 60, r.cy + (Math.random() - 0.5) * 60); m.aggro = 0; }
+  }
+  if (World.endRoom && !G.maps[World.map]) for (let i = 0; i < 2; i++) { const m = spawnMonster(World.map === "bunker" ? "brute" : pickType(), World.endRoom.cx + (i ? 40 : -40), World.endRoom.cy + 30); m.aggro = 0; }
 }
 
 // --- weapons -------------------------------------------------------------------
@@ -268,7 +321,8 @@ function freeSpot(cx, cy, minD, maxD, allowHouse = false, avoidLight = true) {
 
 function pickType() {
   const n = G.night > 0.5, d = G.day;
-  const w = n
+  const custom = MAPS[World.map].spawn;
+  const w = custom ? Object.assign({}, custom) : n
     ? { crawler: 40, ghoul: 30, spitter: 12 + d * 2, stalker: d >= 2 ? 8 + d * 2 : 3, brute: d >= 2 ? 4 + d * 2 : 1 }
     : { crawler: 55, ghoul: 40, spitter: 10, brute: d >= 3 ? 4 : 0 };
   let s = 0; for (const k in w) s += w[k];
@@ -282,13 +336,13 @@ function spawnTick(dt) {
   G.spawnT -= dt;
   if (G.spawnT > 0) return;
   const night = G.night > 0.5;
-  G.spawnT = night ? Math.max(2.2, 4.2 - G.day * 0.3) : 11;
+  G.spawnT = World.indoor ? 7 : night ? Math.max(2.2, 4.2 - G.day * 0.3) : 11;
   const free = G.mons.filter(m => !m.guard && !m.fake && m.type !== "boss").length;
-  const cap = night ? Math.min(7 + G.day * 2, 18) : 3;
+  const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 3;
   if (free >= cap) return;
   // the very first minutes are calm
   if (G.step < 1 && !night) return;
-  const s = freeSpot(G.p.x, G.p.y, 640, 950);
+  const s = World.indoor ? freeSpot(G.p.x, G.p.y, 450, 800) : freeSpot(G.p.x, G.p.y, 640, 950);
   if (!s) return;
   const type = pickType();
   if (type === "stalker" && !night) return;
@@ -585,7 +639,9 @@ function updateProjs(dt) {
     }
     pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.life -= dt;
     if (pr.life <= 0 || pointBlocked(pr.x, pr.y)) { pr.dead = true; if (pr.kind === "bolt") G.drops.push({ x: pr.x - pr.vx * 0.02, y: pr.y - pr.vy * 0.02, item: "bolts", q: 1, t: 60 }); continue; }
-    if (pr.kind === "acid") {
+    if (pr.kind === "dart") {
+      if (dist2(pr.x, pr.y, p.x, p.y) < (p.r + 4) ** 2) { pr.dead = true; hurt(pr.dmg); }
+    } else if (pr.kind === "acid") {
       if (dist2(pr.x, pr.y, p.x, p.y) < (p.r + 6) ** 2) { pr.dead = true; hurt(pr.dmg); spark(pr.x, pr.y, "#9fd02a", 10); }
       if (Math.random() < 0.5) G.parts.push({ x: pr.x, y: pr.y, vx: 0, vy: 0, life: 0.3, max: 0.3, col: "#9fd02a", size: 3 });
     } else if (pr.kind === "bolt") {
@@ -651,6 +707,8 @@ function interactLabel(o) {
     case "bench": return "Верстак — крафт";
     case "bed": return G.night > 0.45 ? "Спать до утра (сохранение)" : "Сохранить игру";
     case "pickup": return "Взять: " + o.label;
+    case "exit": return o.label;
+    case "wchest": return o.full ? "Открыть: " + o.label : "Пустой ящик";
     case "seal": return "Взять: " + o.label;
     case "altar": return G.placed ? "Алтарь" : "Положить печати на алтарь";
     case "car": return o.full ? "Обыскать багажник" : "Машина";
@@ -670,6 +728,25 @@ function doInteract(o) {
       let got = 0;
       for (const [k, ch, a, b] of CRATE_LOOT) if (Math.random() < ch) { addItem(k, a + Math.floor(Math.random() * (b - a + 1))); got++; }
       if (!got) addItem("cloth", 1);
+      if (Math.random() < CRATE_WEAPON_CHANCE) {
+        const w = ["bat", "machete"].find(id => !G.owned.includes(id));
+        if (w) { giveWeapon(w); toast(`На дне ящика: ${WEAPONS[W_IDX[w]].n}!`, 3.5); Sound.craft(); }
+      }
+      return;
+    case "wchest": {
+      if (!o.full) { toast("Ящик пуст.", 1.5); return; }
+      o.full = false;
+      const w = WEAPONS[W_IDX[o.weapon]];
+      if (G.owned.includes(o.weapon)) { for (const k in o.give) addItem(k, o.give[k]); toast(`${w.n} у тебя уже есть — забираешь патроны`, 3); }
+      else { giveWeapon(o.weapon); if (w.mag) G.mag[o.weapon] = w.mag; for (const k in o.give) addItem(k, o.give[k], true); toast(`Найдено оружие: ${w.n}!`, 4); }
+      Sound.craft(); G.shake = 4;
+      tip("wchest", "Оружие в этой игре только находят — в таких ящиках, в подземельях и изредка в обычных ящиках.");
+      save();
+      return;
+    }
+    case "exit":
+      if (G.boss && !G.bossDead) { toast("Хозяин не отпустит тебя.", 2); return; }
+      travel(o.to);
       return;
     case "bench": UI.openInv(); return;
     case "bed": return sleep();
@@ -792,22 +869,126 @@ function readNote(key) {
   if (key === "head" && G.step < 4) { G.step = G.seals.length >= 3 ? 5 : 4; save(); }
 }
 
+function nextHop(from, to) {
+  if (from === to) return null;
+  const prev = { [from]: null }, q = [from];
+  while (q.length) { const m = q.shift(); for (const n of MAP_LINKS[m]) if (!(n in prev)) { prev[n] = m; q.push(n); } }
+  let cur = to;
+  while (prev[cur] && prev[cur] !== from) cur = prev[cur];
+  return prev[cur] === from ? cur : null;
+}
+function routeTo(map) {
+  const hop = nextHop(World.map, map);
+  return hop ? World.exits.find(e => e.to === hop) : null;
+}
+
 function objectiveTarget() {
   const H = id => World.houses.find(h => h.id === id);
+  if (G.step <= 3 || G.step === 5) { if (World.map !== "forest") return routeTo("forest"); }
   switch (G.step) {
     case 0: case 1: return H("forester").doorPos;
     case 2: return World.inter.find(o => o.type === "bench");
     case 3: return H("headman").doorPos;
     case 4: {
       const left = World.inter.filter(o => o.type === "seal" && !G.seals.includes(o.seal));
-      let b = null, bd = 1e18;
-      for (const o of left) { const d = dist2(o.x, o.y, G.p.x, G.p.y); if (d < bd) { bd = d; b = o; } }
-      return b;
+      if (left.length) {
+        let b = null, bd = 1e18;
+        for (const o of left) { const d = dist2(o.x, o.y, G.p.x, G.p.y); if (d < bd) { bd = d; b = o; } }
+        return b;
+      }
+      const want = ["bone", "heart", "eye"].filter(k => !G.seals.includes(k)).map(k => SEAL_MAP[k]);
+      let best = null, bl = 99;
+      for (const m of want) { let n = 0, cur = World.map; while (cur && cur !== m && n < 9) { cur = nextHop(cur, m); n++; } if (n < bl) { bl = n; best = m; } }
+      return best ? routeTo(best) : null;
     }
     case 5: return World.altar;
     case 6: return G.boss;
   }
   return null;
+}
+
+// --- dungeon traps -----------------------------------------------------------------
+
+function segDist(px, py, x1, y1, x2, y2) { return distToSeg(px, py, x1, y1, x2, y2); }
+
+function updateHazards(dt) {
+  const p = G.p;
+  for (const h of World.hazards) {
+    if (h.kind === "spikes") {
+      const t = (G.clock + h.ph) % 3.4;
+      const prev = h.state;
+      h.state = t < 2.3 ? 0 : t < 2.9 ? 1 : 2;
+      if (h.state === 1 && prev === 0 && dist2(p.x, p.y, h.x, h.y) < 500 * 500) Sound.rattle();
+      if (h.state === 2) {
+        if (prev !== 2 && dist2(p.x, p.y, h.x, h.y) < 600 * 600) Sound.spikes();
+        const inside = (x, y, r) => Math.abs(x - h.x) < h.w / 2 + r * 0.5 && Math.abs(y - h.y) < h.h / 2 + r * 0.5;
+        if (inside(p.x, p.y, p.r)) hurt(26);
+        for (const m of G.mons) if (!m.fake && m.type !== "boss" && inside(m.x, m.y, m.r) && !m.spiked) { m.spiked = 0.6; damage(m, 45); }
+      }
+      for (const m of G.mons) if (m.spiked) { m.spiked -= dt; if (m.spiked <= 0) m.spiked = 0; }
+    } else if (h.kind === "bear" && h.armed) {
+      if (dist2(p.x, p.y, h.x, h.y) < 20 * 20) { h.armed = false; hurt(22); p.root = 1.8; Sound.trap(); makeNoise(p.x, p.y, 600); toast("Капкан!", 1.5); tip("bear", "Капканы спрятаны в темноте. Свети фонарём под ноги — металл блеснёт."); }
+      else for (const m of G.mons) if (!m.fake && m.type !== "boss" && dist2(m.x, m.y, h.x, h.y) < (m.r + 8) ** 2) { h.armed = false; damage(m, 50); m.stun = 2.5; Sound.trap(); break; }
+    } else if (h.kind === "wire" && h.armed) {
+      if (segDist(p.x, p.y, h.x1, h.y1, h.x2, h.y2) < p.r) {
+        h.armed = false; Sound.twang();
+        // darts fly from the wall at one end of the wire
+        const sx = h.x1, sy = h.y1, dx = p.x - sx, dy = p.y - sy, l = Math.hypot(dx, dy) || 1;
+        for (let i = 0; i < 3; i++) G.projs.push({ kind: "dart", x: sx, y: sy, vx: dx / l * 520 + (Math.random() - 0.5) * 60, vy: dy / l * 520 + (Math.random() - 0.5) * 60, life: 1.2, dmg: 9 });
+        tip("wire", "Растяжка! Тонкая проволока поперёк коридора — её видно, только если посветить.");
+      }
+    }
+  }
+}
+
+// --- the forest watches you ------------------------------------------------------
+
+function updateCreepy(dt) {
+  const p = G.p, dark = World.indoor || G.night > 0.5;
+  // eyes in the dark that vanish when the light finds them
+  G.watchT -= dt;
+  if (dark && G.watchT <= 0 && G.watchers.length < 3) {
+    G.watchT = (World.indoor ? 10 : 14) + Math.random() * 22;
+    const s = freeSpot(p.x, p.y, 260, 560, World.indoor, false);
+    if (s && !isBeamLit(s.x, s.y, 20)) G.watchers.push({ x: s.x, y: s.y, h: 30 + Math.random() * 90, t: 4 + Math.random() * 6, blink: 0, col: Math.random() < 0.7 ? "#ff2a10" : Math.random() < 0.5 ? "#e8f0ff" : "#b6ff2a", seen: 0 });
+  }
+  for (const w of G.watchers) {
+    w.t -= dt; w.blink -= dt;
+    if (w.blink < -2 - Math.random() * 3) w.blink = 0.15;
+    if (isBeamLit(w.x, w.y, 30) || dist2(p.x, p.y, w.x, w.y) < 140 * 140) {
+      w.seen += dt;
+      if (w.seen > 0.25) { w.t = 0; p.san = Math.max(0, p.san - 3); Sound.whisper(); tip("watchers", "Что-то смотрит на тебя из темноты. Иногда это просто глаза. Иногда — нет."); if (Math.random() < 0.2) { const m = spawnMonster("crawler", w.x, w.y); m.aggro = 8; } }
+    }
+  }
+  G.watchers = G.watchers.filter(w => w.t > 0);
+  // a tall figure stands far away and watches; it is gone when you come closer or light it
+  G.figT -= dt;
+  if (dark && !G.figure && G.figT <= 0 && !World.indoor) {
+    G.figT = 70 + Math.random() * 90;
+    const a = p.a + (Math.random() - 0.5) * 1.2, d = 480 + Math.random() * 200;
+    const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+    const ci = Math.floor(y / World.ncell) * World.nw + Math.floor(x / World.ncell);
+    if (x > 60 && y > 60 && x < WORLD_W - 60 && y < WORLD_H - 60 && !World.nav[ci]) G.figure = { x, y, t: 14, lit: 0 };
+  }
+  if (G.figure) {
+    const f = G.figure, d = Math.hypot(f.x - p.x, f.y - p.y);
+    f.t -= dt;
+    if (isBeamLit(f.x, f.y, 20)) { f.lit += dt; if (f.lit > 0.45) { f.t = 0; Sound.sting(); p.san = Math.max(0, p.san - 6); G.lightOff = Math.max(G.lightOff, 0.35); } }
+    if (d < 300) f.t = 0;
+    if (f.t <= 0) G.figure = null;
+  }
+  // sounds: steps behind you, snapping branches, distant screams, knocking, breathing
+  G.ambT -= dt;
+  if (G.ambT <= 0) {
+    G.ambT = (dark ? 7 : 16) + Math.random() * (dark ? 12 : 20);
+    const r = Math.random(), behind = Math.sin(Math.PI + (Math.random() - 0.5) * 1.2);
+    if (r < 0.25) Sound.stepsBehind(behind);
+    else if (r < 0.45) Sound.snap((Math.random() - 0.5) * 2);
+    else if (r < 0.6 && dark) Sound.farScream((Math.random() - 0.5) * 2);
+    else if (r < 0.72 && (G.inside || World.indoor)) Sound.knock((Math.random() - 0.5) * 2);
+    else if (r < 0.85 && p.san < 60) Sound.breath(behind);
+    else if (dark) { Sound.radio(); G.lightOff = Math.max(G.lightOff, 0.2 + Math.random() * 0.4); }
+  }
 }
 
 function die() {
@@ -822,7 +1003,8 @@ function update(dt) {
   const p = G.p, inp = G.input;
   G.t += dt / DAY_LEN;
   if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
-  G.night = nightFactor(G.t);
+  G.night = World.indoor ? 1 : nightFactor(G.t);
+  G.clock = (G.clock || 0) + dt;
 
   // weather: storms come and go; lightning is mostly for show but also lights the forest
   G.stormT -= dt;
@@ -832,7 +1014,7 @@ function update(dt) {
     if (G.stormOn) toast("Начинается гроза", 3);
   }
   G.storm = clamp(G.storm + (G.stormOn ? 1 : -1) * dt * 0.08, 0, 1);
-  Sound.rain(G.inside ? G.storm * 0.4 : G.storm);
+  Sound.rain(World.indoor ? 0 : G.inside ? G.storm * 0.4 : G.storm);
   G.bolt = Math.max(0, G.bolt - dt);
   if (G.storm > 0.5) {
     G.boltT -= dt;
@@ -851,7 +1033,7 @@ function update(dt) {
   G.inside = insideHouse(p.x, p.y);
   if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
   for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; toast(h.name, 2.5); }
-  if (!G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
+  if (World.altar && !G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
 
   // movement
   // first person: forward/strafe relative to where the player looks
@@ -866,6 +1048,7 @@ function update(dt) {
   else p.sta = Math.min(100, p.sta + (p.moving ? 12 : 22) * dt);
   if (inSwamp(p.x, p.y)) spd *= 0.55;
   if (p.act) spd *= 0.3;
+  if (p.root > 0) { p.root -= dt; spd = 0; }
   const ox = p.x, oy = p.y;
   p.x += mx * spd * dt; p.y += my * spd * dt;
   collide(p);
@@ -907,7 +1090,7 @@ function update(dt) {
     else if (target.type === "crate") tip("crate", "В ящиках ткань, порох, спирт, батарейки и патроны. За ночь часть ящиков наполняется снова.");
     else if (target.type === "note") tip("note", `Записки двигают сюжет. Перечитать — в журнале (${K("⏸ → Журнал", "J")}).`);
   }
-  if (G.night > 0.5) tip("night", "Наступила ночь. Твари сильнее и их больше — держись у света и костров.");
+  if (G.night > 0.5 && !World.indoor) tip("night", "Наступила ночь. Твари сильнее и их больше — держись у света и костров.");
   if (p.bat < 25) tip("battery", `Фонарь садится. Батарейки — в ящиках или на верстаке (2 металлолома + 1 порох).`);
   if (p.san < 55) tip("sanity", "Рассудок падает в темноте и при виде тварей. Помогают костёр, свет и травяной отвар.");
   if (p.hp < 55) tip("heal", `Ты ранен. Лечение — ${K("🩹", "H")} (бинт или аптечка). Бинт: 2 ткани.`);
@@ -960,6 +1143,8 @@ function update(dt) {
   if (G.flowT <= 0) { G.flowT = 0.25; updateFlow(p.x, p.y); }
   updateMonsters(dt);
   updateRoots(dt);
+  updateHazards(dt);
+  updateCreepy(dt);
   updateProjs(dt);
 
   for (const q of G.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.92; q.vy *= 0.92; q.life -= dt; }

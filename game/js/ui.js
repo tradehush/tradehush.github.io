@@ -345,7 +345,7 @@ function boot() {
   cv.addEventListener("contextmenu", e => e.preventDefault());
   setupTouch();
 
-  $("#new").onclick = () => { if (hasSave() && !confirm("Начать заново? Сохранение будет перезаписано.")) return; startIntro(); };
+  $("#new").onclick = () => startIntro();
   $("#continue").onclick = continueGame;
   $("#help-btn").onclick = () => { $("#title").hidden = true; UI.open("help"); UI.helpBack = "title"; };
   $("#help-close").onclick = () => { UI.close(); if (UI.helpBack === "title") { $("#title").hidden = false; } else UI.pause(); };

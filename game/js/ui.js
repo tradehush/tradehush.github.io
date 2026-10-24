@@ -159,6 +159,21 @@ const UI = {
     this.open("guide");
   },
   askExit() { this.open("exit"); },
+  // playing together
+  openNet() {
+    this.open("net");
+    this.netSync();
+  },
+  netSync() {
+    const inGame = G.state === "play", code = Net.role === "host" ? Net.code : "";
+    $("#net-host").hidden = Net.role === "guest" || (Net.role === "host");
+    $("#net-host").textContent = inGame ? "Открыть комнату для друга" : "Создать комнату (я хозяин)";
+    $("#net-code").parentElement.hidden = inGame || !!Net.role;
+    $("#net-leave").hidden = !Net.role;
+    const big = $("#net-code-big"); big.hidden = !code; big.textContent = code;
+    $("#net-status").textContent = Net.status || "";
+  },
+  netStatus(t) { const el = $("#net-status"); if (el) el.textContent = t; if (this.modal === "net") this.netSync(); },
   pause() {
     if (G.state !== "play") return;
     $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
@@ -199,6 +214,7 @@ function exitToTitle(keep) {
 // --- flow between screens ---------------------------------------------------------------
 
 function toTitle() {
+  if (Net.role) netLeave();
   newGame();
   G.state = "title";
   G.p.x = 1310; G.p.y = 2820; G.p.pitch = -0.08;
@@ -519,6 +535,17 @@ function boot() {
   $("#help-guide").onclick = () => UI.openGuide();
   $("#guide-close").onclick = () => { UI.close(); if (G.state === "play") requestLock(); else $("#title").hidden = false; };
   $("#title-guide").onclick = () => { $("#title").hidden = true; UI.openGuide(); };
+  // together: from the title the host starts (or continues) a game and opens a room; the guest types the code
+  $("#title-net").onclick = () => { Sound.init(); UI.openNet(); };
+  $("#p-net").onclick = () => UI.openNet();
+  $("#net-host").onclick = () => {
+    if (G.state !== "play") { if (hasSave()) continueGame(); else { newGame(); enterPlay(); } }
+    netHost(); UI.openNet();
+  };
+  $("#net-join").onclick = () => { Sound.init(); netJoin($("#net-code").value); };
+  $("#net-code").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") $("#net-join").onclick(); });
+  $("#net-leave").onclick = () => { const g = Net.guest; netLeave(); if (g) toTitle(); else UI.netSync(); };
+  $("#net-close").onclick = () => { UI.close(); if (G.state === "play") requestLock(); else $("#title").hidden = false; };
   $("#dead-load").onclick = () => continueGame();
   $("#dead-new").onclick = () => startIntro();
   $("#end-title").onclick = () => toTitle();
@@ -529,7 +556,8 @@ function boot() {
   let last = performance.now();
   const frame = now => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    const running = G.state === "play" && !UI.modal && !G.showMap;
+    // with a friend the world keeps going while a menu or the map is open
+    const running = G.state === "play" && (Net.on || (!UI.modal && !G.showMap));
     if (running) update(dt);
     else if (G.state === "title" || G.state === "intro") {
       G.night = 1;
@@ -572,7 +600,7 @@ addEventListener("DOMContentLoaded", () => {
 });
 // the build this code belongs to; if the site has a newer one, an old copy is stuck on this phone:
 // drop the game's offline cache and its worker, then load again (once per tab)
-const BUILD = 13;
+const BUILD = 14;
 if (location.protocol === "https:" || location.hostname === "localhost") {
   fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(v => {
     let healed = null; try { healed = sessionStorage.getItem("bp.heal"); } catch (e) {}

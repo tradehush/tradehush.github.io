@@ -989,6 +989,44 @@ function buildCar() {
   V.car = g;
 }
 
+// the friend: a person in a dark jacket with a flashlight, a name above the head
+function buildFriend() {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const jacket = lam(0x34402e), pants = lam(0x2a2a30), skin = lam(0xc49a7a), boot = lam(0x1a1612);
+  const B = (w, h, d, m, x, y, z, parent = body) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  const leg = (z) => { const pv = new THREE.Group(); pv.position.set(0, 34, z); body.add(pv); B(9, 30, 9, pants, 0, -15, 0, pv); B(11, 5, 12, boot, 2, -31, 0, pv); return pv; };
+  const arm = (z) => { const pv = new THREE.Group(); pv.position.set(0, 62, z); body.add(pv); B(7, 26, 7, jacket, 0, -13, 0, pv); B(6, 6, 6, skin, 0, -28, 0, pv); return pv; };
+  const legs = [leg(-6), leg(6)], arms = [arm(-13), arm(13)];
+  B(14, 30, 22, jacket, 0, 50, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(8, 12, 10), skin); head.position.set(0, 73, 0); body.add(head);
+  B(17, 4, 18, lam(0x2a3a5a), 1, 80, 0); B(8, 2, 14, lam(0x2a3a5a), 9, 78, 0);
+  // flashlight in the right hand pointing forward
+  const fl = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.6, 14, 8), lam(0x222222)); fl.rotation.z = -Math.PI / 2; fl.position.set(7, -28, 0); arms[1].add(fl);
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(2.4, 10), glowMat(0xfff0c0)); lens.rotation.y = Math.PI / 2; lens.position.set(14.2, -28, 0); arms[1].add(lens);
+  const spot = new THREE.SpotLight(0xfff0d2, 0, FLASH_RANGE, FLASH_HALF, 0.55, 0); spot.position.set(10, 50, 6); g.add(spot); g.add(spot.target); spot.target.position.set(200, 30, 6);
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(70, 300, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.05, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+  beam.rotation.z = Math.PI / 2; beam.position.set(160, 50, 6); g.add(beam);
+  const flash = new THREE.PointLight(0xffd090, 0, 380, 0); flash.position.set(20, 50, 0); g.add(flash);
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(128, (c, S) => { c.font = "bold 44px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "rgba(0,0,0,0.5)"; c.fillRect(4, 38, S - 8, 52); c.fillStyle = "#9fd0ff"; c.fillText("Друг", S / 2, 66); }), depthTest: false, transparent: true, fog: false }));
+  tag.scale.set(34, 34, 1); tag.position.set(0, 100, 0); g.add(tag);
+  V.scene.add(g);
+  return { g, body, legs, arms, spot, beam, flash, tag };
+}
+function syncFriend(dt) {
+  if (!V.friend) V.friend = buildFriend();
+  const F = V.friend, r = typeof netRemoteHere === "function" ? netRemoteHere() : null;
+  F.g.visible = !!r && !r.drive;
+  F.spot.intensity = r && r.light && !r.drive ? 7 : 0;
+  F.flash.intensity = (G.remoteFlash || 0) > 0 ? 5 : 0;
+  if (!r) return;
+  F.g.position.set(r.x, 0, r.y); F.g.rotation.y = -r.a;
+  const sw = Math.sin(r.step || 0) * (r.moving ? 0.6 : 0);
+  F.legs[0].rotation.z = sw; F.legs[1].rotation.z = -sw;
+  F.arms[0].rotation.z = -sw * 0.8; F.arms[1].rotation.z = 1.35 + (r.pitch || 0);
+  F.beam.visible = r.light; F.beam.material.opacity = 0.03 + G.night * 0.04;
+  F.tag.visible = Math.hypot(r.x - G.p.x, r.y - G.p.y) > 60;
+}
+
 function syncCar(dt) {
   const c = G.car, here = carHere() && G.state !== "title" && G.state !== "intro";
   V.car.visible = here;
@@ -2012,6 +2050,7 @@ function render3d(dt) {
   syncDynamic(dt);
   syncCreepy(dt);
   syncCar(dt);
+  syncFriend(dt);
   syncBuilds(dt);
   const r = V.renderer, cam = V.camera;
   r.shadowMap.needsUpdate = true;

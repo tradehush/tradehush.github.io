@@ -13,6 +13,7 @@ function carHere() { return G.car && G.car.map === World.map; }
 
 function carInteract() {
   const c = G.car, p = G.p;
+  if (Net.guest) { toast("Машиной управляет хозяин игры", 2); return; }
   if (c.trunk) { c.trunk = false; addItem("cloth", 2); addItem("battery", 1); addItem("bandage", 1); Sound.pickup(); toast("В багажнике: тряпки, батарейка, бинт.", 3); return; }
   if (!c.engine) {
     if (G.inv.engine > 0) { G.inv.engine--; c.engine = true; c.hp = 100; Sound.craft(); toast("Двигатель установлен!", 3); tip("fuel", "Теперь нужен бензин. Канистры — на заправке и в ящиках, или сделай на верстаке.", "⛽"); }
@@ -107,6 +108,7 @@ function claimBase() {
   const h = G.inside;
   if (!h) { toast("Зайди в дом, который хочешь сделать базой.", 2.5); return; }
   G.base = { map: World.map, id: h.id, name: h.name, x: h.x + h.w / 2, y: h.y + h.h / 2 };
+  if (Net.guest) netSend({ t: "base", base: G.base });
   Sound.craft(); toast(`${h.name} — теперь твоя база`, 3.5);
   tip("base", "Строй вокруг базы: заборы, стены, турели, прожекторы, грядки. Открой стройку и выбери, что поставить.", "🔨");
   save();
@@ -155,7 +157,7 @@ function startPlace(k) {
 // hold ✋ on a build to pick it up; then put it elsewhere, or throw it away for half the materials back
 function pickUpBuild(b) {
   if (G.place || !G.builds.includes(b)) return;
-  removeBuild(b);
+  removeBuild(b); netBuildsChanged();
   G.place = { k: b.k, rot: b.rot, x: b.x, y: b.y, ok: false, move: b };
   Sound.chop();
   tip("carry", Input.touch ? "✔ — поставить здесь, ⟲ — повернуть, 🗑 — убрать совсем, ✕ — вернуть на место." : "ЛКМ — поставить, R — повернуть, Delete — убрать совсем, Esc — вернуть на место.", Input.touch ? "✔" : "ЛКМ");
@@ -163,14 +165,14 @@ function pickUpBuild(b) {
 function cancelPlace() {
   const pl = G.place;
   G.place = null;
-  if (pl && pl.move) { const b = pl.move; b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R); G.builds.push(b); }
+  if (pl && pl.move) { const b = pl.move; b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R); G.builds.push(b); netBuildsChanged(); }
 }
 function trashCarried() {
   const pl = G.place;
   if (!pl || !pl.move) return;
   const d = BDEF[pl.k];
   for (const k in d.need) if (Math.floor(d.need[k] / 2) > 0) addItem(k, Math.floor(d.need[k] / 2), true);
-  G.place = null; Sound.chop(); toast(`${d.n} убран`, 1.5);
+  G.place = null; Sound.chop(); toast(`${d.n} убран`, 1.5); netBuildsChanged();
 }
 
 function updatePlacement() {
@@ -196,13 +198,13 @@ function placeBuild() {
   if (pl.move) {
     const b = pl.move; b.x = pl.x; b.y = pl.y; b.rot = pl.rot;
     b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R);
-    G.builds.push(b); G.place = null; Sound.chop();
+    G.builds.push(b); G.place = null; Sound.chop(); netBuildsChanged();
     return;
   }
   take(d.need);
   const b = { k: pl.k, x: pl.x, y: pl.y, rot: pl.rot, hp: d.hp, ammo: 0 };
   b.R = buildRect(b); rectAdd(b.R); if (!b.R.soft) markRectNav(b.R);
-  G.builds.push(b);
+  G.builds.push(b); netBuildsChanged();
   Sound.chop(); Sound.craft();
   tip("move", `Постройку можно переставить или убрать: держи ${Input.touch ? "✋" : "E"} на ней.`, Input.touch ? "✋" : "E");
   if (!canAfford(d.need)) { G.place = null; toast("Ресурсы кончились", 1.5); }
@@ -224,10 +226,10 @@ function buildUse(b) {
   if (b.k === "turret") {
     const n = Math.min(G.inv.ammo9 || 0, 60 - b.ammo);
     if (n <= 0) { toast(b.ammo >= 60 ? "Турель полная" : "Нет патронов 9мм", 1.8); return; }
-    G.inv.ammo9 -= n; b.ammo += n; Sound.reload(); toast(`Турель заряжена: ${b.ammo}`, 1.8);
+    G.inv.ammo9 -= n; b.ammo += n; Sound.reload(); toast(`Турель заряжена: ${b.ammo}`, 1.8); netBuildsChanged();
   } else if (b.k === "garden") {
-    if (!b.plant) { if (!(G.inv.seeds > 0)) { toast("Нужны семена", 1.8); tip("seeds", "Семена бывают в домах, ящиках и на ферме.", "🌱"); return; } G.inv.seeds--; b.plant = true; b.grow = 0; Sound.pickup(); toast("Посажено", 1.5); }
-    else if (b.grow >= 1) { addItem("veg", 2 + (Math.random() < 0.5 ? 1 : 0)); if (Math.random() < 0.6) addItem("seeds", 1); b.plant = false; b.grow = 0; Sound.pickup(); }
+    if (!b.plant) { if (!(G.inv.seeds > 0)) { toast("Нужны семена", 1.8); tip("seeds", "Семена бывают в домах, ящиках и на ферме.", "🌱"); return; } G.inv.seeds--; b.plant = true; b.grow = 0; Sound.pickup(); toast("Посажено", 1.5); netBuildsChanged(); }
+    else if (b.grow >= 1) { addItem("veg", 2 + (Math.random() < 0.5 ? 1 : 0)); if (Math.random() < 0.6) addItem("seeds", 1); b.plant = false; b.grow = 0; Sound.pickup(); netBuildsChanged(); }
     else toast("Ещё не выросло", 1.2);
   } else if (b.k === "stove" || b.k === "bench") UI.openInv();
   else if (b.k === "bed") sleep();
@@ -374,6 +376,7 @@ function updateAirdrop(dt) {
 
 function openAirdrop(o) {
   o.taken = true; G.drop.looted = true;
+  if (Net.guest) netSend({ t: "drop" });
   for (const [k, a, b, ch] of AIRDROP_LOOT) if (Math.random() < ch) addItem(k, a + Math.floor(Math.random() * (b - a + 1)));
   const missing = ["bat", "machete", "pistol", "shotgun", "crossbow"].filter(w => !G.owned.includes(w));
   if (missing.length && Math.random() < 0.5) { const w = missing[Math.floor(Math.random() * missing.length)]; giveWeapon(w); const W = WEAPONS[W_IDX[w]]; if (W.mag) G.mag[w] = W.mag; toast(`В аирдропе оружие: ${W.n}!`, 4); }

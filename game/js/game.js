@@ -101,6 +101,7 @@ function applyMap(m) {
 }
 
 function save() {
+  if (Net.guest) return false; // the world belongs to the host
   cancelPlace();
   try {
     const p = G.p;
@@ -137,6 +138,7 @@ function load() {
 
 // move to another location through an exit
 function travel(to) {
+  if (Net.guest && Net.on && !Net.pendingMap) { netSend({ t: "go", to }); toast("Идём вместе…", 1.5); return; }
   cancelPlace();
   const from = World.map;
   G.maps[from] = snapMap();
@@ -145,15 +147,17 @@ function travel(to) {
     generateWorld(G.seed, to);
     Object.assign(G, { mons: [], projs: [], drops: [], decals: [], roots: [], tracers: [], parts: [], watchers: [], figure: null, boss: G.bossDead ? null : G.boss, fires: [], traps: [], builds: [], place: null, fishing: null });
     if (G.boss && !G.bossDead) G.boss = null;
-    applyMap(G.maps[to]);
+    applyMap(Net.guest && Net.pendingMap ? Net.pendingMap : G.maps[to]);
+    if (Net.guest && Net.pendingMap) { Net.pendingMap = null; Net.mons = new Map(); }
     const back = World.exits.find(e => e.to === from) || World.exits[0];
     G.p.x = back ? back.ax : World.start.x; G.p.y = back ? back.ay : World.start.y;
     if (back) G.p.a = Math.atan2(back.ay - back.y, back.ax - back.x);
     G.p.pitch = 0;
-    populateMap();
+    if (!Net.guest) populateMap();
     rebuildWorld3d();
     G.state = "play";
     save();
+    if (Net.host && Net.on) netSend({ t: "travel", to, m: snapMap() });
     toast(MAPS[to].n, 3.5);
     if (World.indoor) tip("dungeon", "Подземелье. Здесь ловушки: шипы в полу, спрятанные капканы и растяжки. Свети под ноги. В конце — оружейный ящик.");
     Sound.sting();
@@ -223,14 +227,14 @@ function assistAim(range) {
   if (best) p.a = Math.atan2(best.y - p.y, best.x - p.x);
 }
 
-function makeNoise(x, y, r) { G.noise = { x, y, r, t: 0.5 }; }
+function makeNoise(x, y, r) { G.noise = { x, y, r, t: 0.5 }; if (Net.guest) netSend({ t: "noise", x: Math.round(x), y: Math.round(y), r }); }
 
 function attack() {
   const p = G.p, w = curW();
   if (p.atkCd > 0 || p.reloadT > 0) return;
   if (w.kind === "melee") {
     assistAim(w.range + 30);
-    p.atkCd = w.cd; G.swingT = 0.18; Sound.swing();
+    p.atkCd = w.cd; G.swingT = 0.18; Sound.swing(); Net.fireN++;
     let hit = false;
     for (const m of G.mons) {
       const d = Math.hypot(m.x - p.x, m.y - p.y);
@@ -260,7 +264,7 @@ function attack() {
     if (G.inv[w.ammo] > 0) startReload(); else { Sound.click(); p.atkCd = 0.3; toast(`Нет боеприпасов: ${ITEMS[w.ammo].n}`, 1.5); }
     return;
   }
-  G.mag[w.id] = m - 1; p.atkCd = w.cd; G.kick = 1;
+  G.mag[w.id] = m - 1; p.atkCd = w.cd; G.kick = 1; Net.fireN++;
   const mx = p.x + Math.cos(p.a) * 18, my = p.y + Math.sin(p.a) * 18;
   if (w.kind === "bow") {
     G.projs.push({ kind: "bolt", x: mx, y: my, vx: Math.cos(p.a) * w.speed, vy: Math.sin(p.a) * w.speed, dmg: w.dmg, life: 0.9, pierce: 3, hit: [] });
@@ -312,6 +316,7 @@ function spawnMonster(type, x, y, extra = {}) {
   const m = Object.assign({ type, x, y, r: d.r, hp: d.hp * hpMul, max: d.hp * hpMul, a: Math.random() * 6.28, state: "wander", aggro: 0,
     atkT: 0, wind: 0, stun: 0, kx: 0, ky: 0, hitF: 0, wx: x, wy: y, wT: 0, losT: 0, los: false, lit: false, beam: false,
     spitT: 2, sumT: 6, rootT: 8, darkT: 12, chargeT: 9, charge: 0, step: Math.random() * 10, growlT: 3 + Math.random() * 8, burn: 0 }, extra);
+  if (!m.id) m.id = G.monId = (G.monId || 0) + 1;
   G.mons.push(m);
   return m;
 }
@@ -374,6 +379,12 @@ function spawnTick(dt) {
 function damage(m, dmg, kx = 0, ky = 0, fire = false) {
   if (m.dead) return;
   if (m.fake) { vanish(m); return; }
+  if (Net.guest && Net.on) {
+    netDamage(m, dmg, kx, ky, fire);
+    m.hitF = 0.12;
+    if (!fire) { blood(m.x, m.y, 5, m.type === "stalker" ? "#141418" : m.type === "spitter" ? "#3d4a12" : "#5a0c0c"); Sound.at(m.x, m.y, Sound.flesh); }
+    return;
+  }
   if (m.type === "lord") {
     // it cannot be killed; a hard enough blow only staggers it for a moment
     m.hitF = 0.12; spark(m.x, m.y, "#3a2a1a", 4, 80);
@@ -458,13 +469,13 @@ function hurt(dmg, src) {
 }
 
 function updateMonsters(dt) {
-  const p = G.p;
-  const senseBase = 330 + G.night * 260 + (p.light ? 110 : 0);
   for (const m of G.mons) {
     if (m.dead) continue;
+    const p = monTarget(m), remoteTg = !!p.isRemote;
+    const senseBase = 330 + G.night * 260 + (p.light ? 110 : 0);
     const def = MONSTERS[m.type];
     const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
-    if (m.type === "lord") { lordAI(m, dt, d, dx, dy); continue; }
+    if (m.type === "lord") { lordAI(m, dt, d, dx, dy, p); continue; }
     m.beam = isBeamLit(m.x, m.y, m.r) || fireLit(m.x, m.y);
     m.lit = m.beam || d < HALO_R + m.r || G.night < 0.4;
     m.hitF = Math.max(0, m.hitF - dt);
@@ -517,7 +528,7 @@ function updateMonsters(dt) {
         const bx = G.base.x - m.x, by = G.base.y - m.y, bl = Math.hypot(bx, by) || 1;
         dir = bl > 60 ? { x: bx / bl, y: by / bl } : { x: 0, y: 0 };
       }
-      else if (m.los) dir = { x: dx / d, y: dy / d };
+      else if (m.los || remoteTg) dir = { x: dx / d, y: dy / d };
       else dir = flowDir(m.x, m.y) || { x: dx / d, y: dy / d };
       if (m.type === "spitter" && m.los) {
         if (d < 200) dir = { x: -dx / d, y: -dy / d };
@@ -546,13 +557,13 @@ function updateMonsters(dt) {
         if (m.wind > 0) {
           m.wind -= dt; spd *= 0.2;
           if (m.wind <= 0) {
-            if (d < reach + (m.type === "brute" || m.type === "boss" ? 22 : 10) && m.los && !m.fake) hurt(def.dmg, m);
+            if (d < reach + (m.type === "brute" || m.type === "boss" ? 22 : 10) && m.los && !m.fake) hitTarget(p, def.dmg, m);
             m.atkT = def.acd;
           }
         } else if (d < reach && m.atkT <= 0) {
           m.wind = m.type === "brute" ? 0.65 : m.type === "boss" ? 0.5 : m.type === "stalker" ? 0.12 : 0.28;
         }
-      } else if (m.type === "spitter" && d < reach && m.atkT <= 0) { hurt(def.dmg * 0.6, m); m.atkT = def.acd; }
+      } else if (m.type === "spitter" && d < reach && m.atkT <= 0) { hitTarget(p, def.dmg * 0.6, m); m.atkT = def.acd; }
       if (d < m.r + p.r + 2) { mvx = 0; mvy = 0; }
     } else {
       // wander
@@ -603,10 +614,11 @@ function updateMonsters(dt) {
   }
 
   // despawn far / daylight
+  const p = G.p;
   G.mons = G.mons.filter(m => {
     if (m.dead) return false;
     if (m.guard || m.type === "boss" || m.camp) return true;
-    const d2p = dist2(m.x, m.y, p.x, p.y);
+    const rr = netRemoteHere(), d2p = Math.min(dist2(m.x, m.y, p.x, p.y), rr ? dist2(m.x, m.y, rr.x, rr.y) : 1e18);
     if (m.type === "lord") return d2p < 7000 * 7000;
     if (d2p > 1500 * 1500) return false;
     if (G.night < 0.2 && m.state !== "chase" && d2p > 750 * 750 && Math.random() < dt * 0.3) return false;
@@ -704,7 +716,10 @@ function updateProjs(dt) {
     if (pr.kind === "dart") {
       if (dist2(pr.x, pr.y, p.x, p.y) < (p.r + 4) ** 2) { pr.dead = true; hurt(pr.dmg); }
     } else if (pr.kind === "acid") {
+      if (pr.net) continue;
       if (dist2(pr.x, pr.y, p.x, p.y) < (p.r + 6) ** 2) { pr.dead = true; hurt(pr.dmg); spark(pr.x, pr.y, "#9fd02a", 10); }
+      const rr = Net.host && netRemoteHere();
+      if (rr && dist2(pr.x, pr.y, rr.x, rr.y) < 18 * 18) { pr.dead = true; hitTarget(rr, pr.dmg, pr); }
       if (Math.random() < 0.5) G.parts.push({ x: pr.x, y: pr.y, vx: 0, vy: 0, life: 0.3, max: 0.3, col: "#9fd02a", size: 3 });
     } else if (pr.kind === "bolt") {
       for (const m of G.mons) {
@@ -722,7 +737,7 @@ function updateProjs(dt) {
     d.t -= dt;
     const dd = dist2(d.x, d.y, p.x, p.y);
     if (dd < 90 * 90) { const l = Math.sqrt(dd) || 1; d.x += (p.x - d.x) / l * 200 * dt; d.y += (p.y - d.y) / l * 200 * dt; }
-    if (dd < 22 * 22) { d.t = 0; addItem(d.item, d.q); Sound.pickup(); }
+    if (dd < 22 * 22) { d.t = 0; addItem(d.item, d.q); Sound.pickup(); if (Net.guest) netSend({ t: "pick", id: d.id }); }
   }
   G.drops = G.drops.filter(d => d.t > 0);
 
@@ -790,6 +805,10 @@ const HOME_TYPES = new Set(["switch", "generator", "fireplace", "sofa", "radio",
 function isHoldAction(o) { return !!GATHER[o.type]; }
 
 function doInteract(o) {
+  doInteract0(o);
+  if (Net.on && o && World.inter.includes(o)) netInter(o);
+}
+function doInteract0(o) {
   const p = G.p;
   if (HOME_TYPES.has(o.type)) { homeUse(o); return; }
   switch (o.type) {
@@ -870,11 +889,13 @@ function finishGather(o) {
   for (const [k, q] of g.give(o)) addItem(k, q);
   o.left--; World.dirty = true;
   if (o.left <= 0) { o.regrow = G.day + g.regrow; if (o.type === "rock" || o.type === "scrap") o.block = false; }
+  netRes(o);
   Sound.pickup();
 }
 
 function sleep() {
   const p = G.p;
+  if (Net.guest) { toast("Спать и сохраняться может только хозяин игры", 2.5); return; }
   if (G.night > 0.45) {
     if (G.mons.some(m => !m.fake && m.state === "chase" && dist2(m.x, m.y, p.x, p.y) < 900 * 900)) { toast("Нельзя спать — твари рядом!", 2.5); return; }
     if (G.step === 6) { toast("Не время спать.", 2); return; }
@@ -922,10 +943,12 @@ function craft(r) {
     toast(`Создано: ${r.n}`, 2.5);
     if (r.out === "axe" && G.step === 2) { G.step = 3; toast("Теперь — в деревню. Дом старосты на северо-востоке.", 4); save(); }
   } else if (r.out === "campfire") {
-    G.fires.push({ x: p.x + Math.cos(p.a) * 40, y: p.y + Math.sin(p.a) * 40, life: 240 });
+    const fx = p.x + Math.cos(p.a) * 40, fy = p.y + Math.sin(p.a) * 40;
+    if (Net.guest) netSend({ t: "fire", x: Math.round(fx), y: Math.round(fy), life: 240 }); else G.fires.push({ x: fx, y: fy, life: 240 });
     toast("Костёр разожжён", 2);
   } else if (r.out === "trap") {
-    G.traps.push({ x: p.x + Math.cos(p.a) * 40, y: p.y + Math.sin(p.a) * 40 });
+    const tx = p.x + Math.cos(p.a) * 40, ty = p.y + Math.sin(p.a) * 40;
+    if (Net.guest) netSend({ t: "trap", x: Math.round(tx), y: Math.round(ty) }); else G.traps.push({ x: tx, y: ty });
     toast("Капкан установлен", 2);
   } else addItem(r.out, r.q, true);
   Sound.craft();
@@ -1037,7 +1060,7 @@ function updateHazards(dt) {
         h.t -= dt;
         if (Math.random() < 0.6) spark(h.x + (Math.random() - 0.5) * h.r, h.y + (Math.random() - 0.5) * h.r, "#8a7a60", 1, 30, 0.6, 2);
         if (h.t <= 0) {
-          h.armed = false; Sound.thunder(0); G.shake = Math.max(G.shake, 16); makeNoise(h.x, h.y, 900);
+          h.armed = false; netHz(h); Sound.thunder(0); G.shake = Math.max(G.shake, 16); makeNoise(h.x, h.y, 900);
           if (dist2(p.x, p.y, h.x, h.y) < (h.r + 8) ** 2) { hurt(30); p.root = 1.2; toast("Обвал!", 1.5); }
           for (const m of G.mons) if (!m.fake && m.type !== "boss" && dist2(m.x, m.y, h.x, h.y) < (h.r + m.r) ** 2) damage(m, 70);
         }
@@ -1057,11 +1080,11 @@ function updateHazards(dt) {
       }
       for (const m of G.mons) if (m.spiked) { m.spiked -= dt; if (m.spiked <= 0) m.spiked = 0; }
     } else if (h.kind === "bear" && h.armed) {
-      if (dist2(p.x, p.y, h.x, h.y) < 20 * 20) { h.armed = false; hurt(22); p.root = 1.8; Sound.trap(); makeNoise(p.x, p.y, 600); toast("Капкан!", 1.5); tip("bear", "Капканы спрятаны в темноте. Свети фонарём под ноги — металл блеснёт."); }
-      else for (const m of G.mons) if (!m.fake && m.type !== "boss" && dist2(m.x, m.y, h.x, h.y) < (m.r + 8) ** 2) { h.armed = false; damage(m, 50); m.stun = 2.5; Sound.trap(); break; }
+      if (dist2(p.x, p.y, h.x, h.y) < 20 * 20) { h.armed = false; netHz(h); hurt(22); p.root = 1.8; Sound.trap(); makeNoise(p.x, p.y, 600); toast("Капкан!", 1.5); tip("bear", "Капканы спрятаны в темноте. Свети фонарём под ноги — металл блеснёт."); }
+      else for (const m of G.mons) if (!m.fake && m.type !== "boss" && dist2(m.x, m.y, h.x, h.y) < (m.r + 8) ** 2) { h.armed = false; netHz(h); damage(m, 50); m.stun = 2.5; Sound.trap(); break; }
     } else if (h.kind === "wire" && h.armed) {
       if (segDist(p.x, p.y, h.x1, h.y1, h.x2, h.y2) < p.r) {
-        h.armed = false; Sound.twang();
+        h.armed = false; netHz(h); Sound.twang();
         // darts fly from the wall at one end of the wire
         const sx = h.x1, sy = h.y1, dx = p.x - sx, dy = p.y - sy, l = Math.hypot(dx, dy) || 1;
         for (let i = 0; i < 3; i++) G.projs.push({ kind: "dart", x: sx, y: sy, vx: dx / l * 520 + (Math.random() - 0.5) * 60, vy: dy / l * 520 + (Math.random() - 0.5) * 60, life: 1.2, dmg: 9 });
@@ -1122,30 +1145,43 @@ function updateCreepy(dt) {
 }
 
 function die() {
-  G.state = "dead";
   Sound.scream();
+  // together you do not lose: you come back next to your friend a few seconds later
+  if (Net.on && Net.remote) {
+    if (G.downT > 0) return;
+    G.downT = 6; G.p.hp = 0; toast("Ты погиб… друг рядом, возвращаешься", 4);
+    return;
+  }
+  G.state = "dead";
   UI.showDead();
 }
 
 // --- main update -------------------------------------------------------------------
 
 function update(dt) {
-  const p = G.p, inp = G.input;
-  G.t += dt / DAY_LEN;
-  if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
+  const p = G.p, inp = G.input, NG = Net.guest; // the guest gets time, weather and creatures from the host
+  netTick(dt);
+  // fallen in a game with a friend: back on your feet next to them in a few seconds
+  if (G.downT > 0) {
+    G.downT -= dt; p.hp = 0; p.root = 0.3;
+    if (G.downT <= 0) { const r = Net.remote; if (r && r.map === World.map) { p.x = r.x + 30; p.y = r.y + 20; collide(p); } p.hp = 50; p.san = Math.max(p.san, 40); p.iframe = 2; toast("Ты снова на ногах", 2); }
+  }
+  if (!NG) {
+    G.t += dt / DAY_LEN;
+    if (G.t >= 1) { G.t -= 1; newDay(); toast(`День ${G.day}`, 3); }
+  }
   G.night = World.indoor ? 1 : nightFactor(G.t);
   G.clock = (G.clock || 0) + dt;
   Sound.listener(p.x, p.y, p.a);
   Sound.setEnv(World.indoor ? 0.55 : G.inside ? 0.26 : 0.06);
   Sound.ambience(dt, { night: G.night, dungeon: World.indoor, house: !!G.inside, rain: G.storm || 0 });
   Sound.hunt = !!G.lordHunt;
-  updatePower(dt);
-  ensureLord(dt);
+  if (!NG) { updatePower(dt); ensureLord(dt); }
   updateLordFx(dt);
 
   // weather: mostly clear and sunny by day; now and then fog rolls in or a thunderstorm comes
   G.stormT -= dt;
-  if (G.stormT <= 0) {
+  if (G.stormT <= 0 && !NG) {
     G.wx = (G.wx || "clear") !== "clear" ? "clear" : Math.random() < 0.5 ? "fog" : "rain";
     G.stormOn = G.wx === "rain";
     G.stormT = G.wx === "clear" ? 260 + Math.random() * 320 : 100 + Math.random() * 140;
@@ -1309,7 +1345,7 @@ function update(dt) {
   // hallucinations and whispers
   if (p.san < 40) {
     G.hallT -= dt;
-    if (G.hallT <= 0) {
+    if (G.hallT <= 0 && !NG) {
       G.hallT = 6 + Math.random() * 14 * (p.san / 40 + 0.3);
       const s = freeSpot(p.x, p.y, 260, 420, false, false);
       if (s) { const m = spawnMonster(Math.random() < 0.5 ? "ghoul" : "stalker", s.x, s.y, { fake: true, fakeT: 8, aggro: 99 }); m.hp = 1; }
@@ -1320,16 +1356,17 @@ function update(dt) {
   }
 
   if (G.state !== "play") return;
-  spawnTick(dt);
-  G.flowT -= dt;
-  if (G.flowT <= 0) { G.flowT = 0.25; updateFlow(p.x, p.y); }
-  updateMonsters(dt);
-  updateRoots(dt);
+  if (NG) netGuestTick(dt);
+  else {
+    spawnTick(dt);
+    G.flowT -= dt;
+    if (G.flowT <= 0) { G.flowT = 0.25; updateFlow(p.x, p.y); }
+    updateMonsters(dt);
+    updateRoots(dt);
+  }
   updateHazards(dt);
   updateCreepy(dt);
-  updateBuilds(dt);
-  updateAirdrop(dt);
-  updateRaid(dt);
+  if (!NG) { updateBuilds(dt); updateAirdrop(dt); updateRaid(dt); }
   updateProjs(dt);
 
   for (const q of G.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.92; q.vy *= 0.92; q.life -= dt; }

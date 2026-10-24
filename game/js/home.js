@@ -72,13 +72,14 @@ function homeUse(o) {
   switch (o.type) {
     case "switch": case "generator": {
       const gen = o.type === "generator", pw = powerOf(gen ? "gen" : o.sw);
-      if (pw.on) { pw.on = false; Sound.switchClick(); return; }
+      if (pw.on) { pw.on = false; Sound.switchClick(); if (Net.guest) netSend({ t: "power", k: World.map + ":" + (gen ? "gen" : o.sw), on: false, e: pw.e }); return; }
       if (pw.e <= 0) {
         const need = gen ? "fuel" : "battery";
         if (!(G.inv[need] > 0)) { toast(gen ? "Нужен бензин ⛽" : "Щиток пуст — нужна батарейка 🔋", 2.2); Sound.click(); return; }
         G.inv[need]--; pw.e = 1;
       }
       pw.on = true;
+      if (Net.guest) netSend({ t: "power", k: World.map + ":" + (gen ? "gen" : o.sw), on: true, e: pw.e });
       if (gen) {
         Sound.hum(); makeNoise(p.x, p.y, 4000);
         toast("Свет! Но теперь тебя слышат все…", 3);
@@ -95,7 +96,8 @@ function homeUse(o) {
     case "fireplace": {
       if (nearHearth(o)) { toast("Тепло. Рассудок восстанавливается.", 1.6); return; }
       if (!(G.inv.wood >= 2)) { toast("Нужно 2 дерева", 1.6); return; }
-      G.inv.wood -= 2; G.fires.push({ x: o.fx, y: o.fy, life: 300, hearth: true }); Sound.fire();
+      G.inv.wood -= 2; Sound.fire();
+      if (Net.guest) netSend({ t: "fire", x: Math.round(o.fx), y: Math.round(o.fy), life: 300, h: 1 }); else G.fires.push({ x: o.fx, y: o.fy, life: 300, hearth: true });
       return;
     }
     case "sofa": {

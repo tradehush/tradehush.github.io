@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Чёрная Сосна">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -28,11 +28,12 @@
     <div class="menu">
       <button class="btn" id="continue" hidden>Продолжить</button>
       <button class="btn" id="new">Новая игра</button>
+      <button class="btn" id="title-net">👥 Играть с другом</button>
       <button class="btn ghost" id="help-btn">Управление</button>
       <button class="btn ghost" id="title-guide">Как крафтить</button>
       <button class="btn" id="install" hidden>Установить на телефон</button>
     </div>
-    <p class="hint">Играть лучше в наушниках и в темноте.<br><span class="touch-only">Поверни телефон горизонтально.</span><br><small class="ver">версия 13</small></p>
+    <p class="hint">Играть лучше в наушниках и в темноте.<br><span class="touch-only">Поверни телефон горизонтально.</span><br><small class="ver">версия 14</small></p>
   </div>
 </div>
 
@@ -156,6 +157,22 @@
   </div>
 </div>
 
+<div id="net" class="panel" hidden>
+  <div class="box">
+    <h2>👥 Играть с другом</h2>
+    <p class="muted">Нужен интернет у обоих. Один создаёт комнату и говорит другу код из 4 знаков, второй вводит этот код у себя.</p>
+    <div class="netcode" id="net-code-big" hidden></div>
+    <div class="menu wide-menu">
+      <button class="btn" id="net-host">Создать комнату (я хозяин)</button>
+      <div class="netjoin"><input id="net-code" maxlength="4" placeholder="КОД" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="btn" id="net-join">Подключиться</button></div>
+      <p id="net-status" class="netstatus"></p>
+      <button class="btn ghost" id="net-leave" hidden>Выйти из совместной игры</button>
+      <button class="btn ghost" id="net-close">Закрыть</button>
+    </div>
+    <p class="muted small">Хозяин хранит мир и сохранения. У каждого своя сумка. Если погибнешь — вернёшься к другу через несколько секунд.</p>
+  </div>
+</div>
+
 <div id="journal" class="panel" hidden>
   <div class="box">
     <h2>Журнал</h2>
@@ -169,6 +186,7 @@
     <h2>Пауза</h2>
     <div class="menu pause-menu">
       <button class="btn" id="resume">Продолжить</button>
+      <button class="btn" id="p-net">👥 Играть с другом</button>
       <button class="btn ghost" id="p-journal">Журнал</button>
       <button class="btn ghost" id="p-help">Управление</button>
       <button class="btn ghost" id="p-guide">Как крафтить</button>
@@ -230,17 +248,18 @@
   </div>
 </div>
 
-<script src="vendor/three.min.js?v=13"></script>
-<script src="js/data.js?v=13"></script>
-<script src="js/audio.js?v=13"></script>
-<script src="js/world.js?v=13"></script>
-<script src="js/game.js?v=13"></script>
-<script src="js/life.js?v=13"></script>
-<script src="js/home.js?v=13"></script>
-<script src="js/boss.js?v=13"></script>
-<script src="js/voice.js?v=13"></script>
-<script src="js/scene3d.js?v=13"></script>
-<script src="js/hud.js?v=13"></script>
-<script src="js/ui.js?v=13"></script>
+<script src="vendor/three.min.js?v=14"></script>
+<script src="js/data.js?v=14"></script>
+<script src="js/audio.js?v=14"></script>
+<script src="js/world.js?v=14"></script>
+<script src="js/game.js?v=14"></script>
+<script src="js/life.js?v=14"></script>
+<script src="js/home.js?v=14"></script>
+<script src="js/boss.js?v=14"></script>
+<script src="js/net.js?v=14"></script>
+<script src="js/voice.js?v=14"></script>
+<script src="js/scene3d.js?v=14"></script>
+<script src="js/hud.js?v=14"></script>
+<script src="js/ui.js?v=14"></script>
 </body>
 </html>

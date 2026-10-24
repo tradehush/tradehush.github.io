@@ -116,6 +116,37 @@ function drawHUD(ctx) {
   ctx.textBaseline = "middle";
   const font = (sz, b = "bold") => ctx.font = `${b} ${sz * u}px ui-monospace, Menlo, Consolas, monospace`;
 
+  // together: the room code while waiting, then the friend's health and where they are
+  if (Net.role) {
+    font(10); ctx.textAlign = "left";
+    const r = Net.remote, y = pad + 44 * u;
+    let t;
+    if (Net.host && !Net.on) t = "👥 комната " + Net.code;
+    else if (!r) t = "👥 соединение…";
+    else {
+      const here = r.map === World.map, d = here ? Math.round(Math.hypot(r.x - p.x, r.y - p.y) / 40) : null;
+      t = "👥 друг " + (r.hp > 0 ? "❤" + r.hp : "☠") + (here ? "  " + d + " м" : "  в другом месте");
+    }
+    const tw = ctx.measureText(t).width + 14 * u;
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(pad, y - 9 * u, tw, 18 * u);
+    ctx.fillStyle = "#cfe6ff"; ctx.fillText(t, pad + 7 * u, y);
+    // an arrow at the screen edge pointing to the friend when they are out of sight
+    if (r && r.map === World.map && !G.showMap) {
+      const ang = Math.atan2(r.y - p.y, r.x - p.x) - p.a, dd = Math.hypot(r.x - p.x, r.y - p.y);
+      if (dd > 160 && Math.abs(angDiff(0, ang)) > 0.55) {
+        const cx = W / 2 + Math.sin(ang) * W * 0.42, cy = H / 2 - Math.cos(ang) * H * 0.4;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.fillStyle = "rgba(140,200,255,0.75)";
+        ctx.beginPath(); ctx.moveTo(0, -9 * u); ctx.lineTo(7 * u, 6 * u); ctx.lineTo(-7 * u, 6 * u); ctx.fill(); ctx.restore();
+      }
+    }
+  }
+  if (G.downT > 0) {
+    ctx.fillStyle = "rgba(60,0,0,0.6)"; ctx.fillRect(0, 0, W, H);
+    font(22); ctx.textAlign = "center"; ctx.fillStyle = "#e05040"; ctx.fillText("ТЫ ПОГИБ", W / 2, H * 0.4);
+    font(13); ctx.fillStyle = "#e8d8c0"; ctx.fillText(`Вернёшься к другу через ${Math.ceil(G.downT)}`, W / 2, H * 0.4 + 30 * u);
+    ctx.textAlign = "left";
+  }
+
   // vitals: icon + thin bar, nothing else
   // only what matters right now: full stamina and a full flashlight stay hidden
   // a bar shows up only when that stat drops; a healthy screen stays empty
@@ -354,6 +385,7 @@ function drawMap(ctx) {
   ctx.font = `${14 * u}px serif`; ctx.textAlign = "center";
   if (G.base && G.base.map === World.map) { ctx.fillText("⌂", ox + G.base.x * k, oy + G.base.y * k); ctx.strokeStyle = "rgba(120,200,120,0.5)"; ctx.beginPath(); ctx.arc(ox + G.base.x * k, oy + G.base.y * k, BASE_R * k, 0, 7); ctx.stroke(); }
   if (carHere() && !G.drive) ctx.fillText("🚗", ox + G.car.x * k, oy + G.car.y * k);
+  { const r = netRemoteHere(); if (r) { ctx.save(); ctx.translate(ox + r.x * k, oy + r.y * k); ctx.rotate(r.a); ctx.fillStyle = "#8cc8ff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5 * u; ctx.beginPath(); ctx.moveTo(9 * u, 0); ctx.lineTo(-6 * u, -6 * u); ctx.lineTo(-6 * u, 6 * u); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore(); } }
   if (G.drop && !G.drop.looted && World.map === "forest") ctx.fillText("📦", ox + G.drop.x * k, oy + G.drop.y * k);
   ctx.font = `bold ${11 * u}px ui-monospace, monospace`;
   for (const f of G.fires) { ctx.fillStyle = "#ff8a20"; ctx.beginPath(); ctx.arc(ox + f.x * k, oy + f.y * k, 3 * u, 0, 7); ctx.fill(); }

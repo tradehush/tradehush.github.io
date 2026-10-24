@@ -29,8 +29,8 @@ function lordSpotted(m) {
   tip("lord", "Это Хозяин леса. Его не убить. Беги, прячься в доме без света, уходи из виду.", "⚠");
 }
 
-function lordAI(m, dt, d, dx, dy) {
-  const p = G.p, night = G.night > 0.5;
+function lordAI(m, dt, d, dx, dy, tgt) {
+  const p = tgt || G.p, night = G.night > 0.5, remote = !!p.isRemote;
   m.hitF = Math.max(0, m.hitF - dt); m.atkT = Math.max(0, m.atkT - dt);
   m.stun = Math.max(0, m.stun - dt); m.wind = Math.max(0, m.wind - dt);
   m.losT -= dt;
@@ -38,8 +38,8 @@ function lordAI(m, dt, d, dx, dy) {
   m.beam = isBeamLit(m.x, m.y, m.r); m.lit = true;
 
   // does it see you? a dark house hides you, a flashlight at night gives you away
-  const lightOnMe = p.light && G.lightOff <= 0;
-  const hiddenIndoors = G.inside && !insideHouse(m.x, m.y) && !lightOnMe;
+  const lightOnMe = remote ? p.light : p.light && G.lightOff <= 0;
+  const hiddenIndoors = (remote ? insideHouse(p.x, p.y) : G.inside) && !insideHouse(m.x, m.y) && !lightOnMe;
   let range = night ? LORD.seeNight : LORD.seeDay;
   if (night && lightOnMe) range *= 1.3;
   if (G.drive) range *= 1.2;
@@ -48,11 +48,12 @@ function lordAI(m, dt, d, dx, dy) {
   const heard = G.noise && G.noise.r >= 500 && dist2(m.x, m.y, G.noise.x, G.noise.y) < G.noise.r * G.noise.r * 0.5;
   const sees = (m.los && d < range && (facing || d < 320 || m.state === "hunt")) || d < 130;
   if (sees) {
-    if (m.state !== "hunt") lordSpotted(m);
+    if (m.state !== "hunt" && !remote) lordSpotted(m);
+    m.tgRemote = remote;
     m.state = "hunt"; m.lastX = p.x; m.lastY = p.y; m.lostT = 0;
   } else if (m.state === "hunt") {
     m.lostT += dt;
-    if (m.lostT > LORD.loseAfter || d > 1800) { m.state = "search"; m.searchT = 14; G.lordHunt = false; toast("Он потерял тебя…", 2.5); Sound.growl(0.35, 0.3); }
+    if (m.lostT > LORD.loseAfter || d > 1800) { m.state = "search"; m.searchT = 14; if (!m.tgRemote) { G.lordHunt = false; toast("Он потерял тебя…", 2.5); } m.tgRemote = false; Sound.growl(0.35, 0.3); }
   } else if (heard) { m.state = "search"; m.searchT = 10; m.lastX = G.noise.x; m.lastY = G.noise.y; }
 
   // where to go
@@ -83,7 +84,7 @@ function lordAI(m, dt, d, dx, dy) {
   // attack
   if (d < m.r + p.r + 30 && m.atkT <= 0 && m.state === "hunt") {
     m.atkT = 1.4; m.wind = 0.4;
-    hurt(LORD.dmg, m); G.shake = Math.max(G.shake, 26); Sound.bossRoar();
+    hitTarget(p, LORD.dmg, m); if (!remote) G.shake = Math.max(G.shake, 26); Sound.at(m.x, m.y, Sound.bossRoar);
   }
 
   const mx = tx - m.x, my = ty - m.y, ml = Math.hypot(mx, my) || 1;
@@ -104,7 +105,8 @@ function lordAI(m, dt, d, dx, dy) {
 function updateLordFx(dt) {
   G.lordAlert = Math.max(0, (G.lordAlert || 0) - dt);
   const lord = G.mons.find(m => m.type === "lord" && !m.dead);
-  if (!lord || lord.state !== "hunt" || World.indoor) { G.lordHunt = false; return; }
+  if (Net.guest) { if (!G.lordHunt) return; }
+  else if (!lord || lord.state !== "hunt" || lord.tgRemote || World.indoor) { G.lordHunt = false; return; }
   G.heartT = (G.heartT || 0) - dt;
   if (G.heartT <= 0) { G.heartT = 0.5; Sound.heart(); }
 }

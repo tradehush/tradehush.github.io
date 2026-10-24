@@ -166,3 +166,8 @@ kbd { font: 12px ui-monospace, monospace; background: #222; border: 1px solid #4
 #touch.lowhp #t-heal { display: grid; animation: healpulse 1s ease-in-out infinite; border-color: #e05040; }
 @keyframes healpulse { 50% { background: rgba(160,30,20,.55); } }
 .ver { opacity: .45; font-size: 11px; letter-spacing: .05em; }
+.netcode { font: 900 44px/1 ui-monospace, monospace; letter-spacing: .3em; text-align: center; color: #e8d690; margin: 6px 0 12px; padding: 10px; border: 1px dashed rgba(216,200,144,.5); border-radius: 10px; }
+.netjoin { display: flex; gap: 8px; }
+.netjoin input { flex: 1; min-width: 0; font: 700 22px ui-monospace, monospace; letter-spacing: .25em; text-transform: uppercase; text-align: center; background: rgba(0,0,0,.4); color: #fff; border: 1px solid rgba(216,200,144,.5); border-radius: 8px; padding: 8px; }
+.netstatus { min-height: 1.2em; color: #e8d690; text-align: center; margin: 4px 0; }
+.muted.small { font-size: 12px; margin-top: 10px; }

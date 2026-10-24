@@ -63,21 +63,16 @@
         <p><b>На телефоне:</b> левый палец — стик движения (отведи дальше — бег), правый — води по экрану, чтобы смотреть. Большая кнопка ⚔ — атака (её тоже можно тянуть, чтобы поворачиваться), ✋ — действие (держать — рубить/копать), 🔦 фонарь, ⟳ перезарядка, ⇄ оружие. Прицел слегка доводится на тварей.</p>
         <p><b>Советы.</b> Ночью твари сильнее и их больше. Свет фонаря и костры держат рассудок. Если рассудок упадёт — начнутся видения, а потом лес начнёт есть тебя. Спать и сохраняться можно в кровати в доме лесника.</p>
         <p>Тень замирает, когда на неё светят фонарём. Не отворачивайся.</p>
+        <p><b>Игра слушает тебя</b> (включается в паузе): с твоего разрешения она слышит микрофон и отвечает на некоторые фразы. Скажи, например, что тварей давно не было… Пока режим включён, вверху горит 🎙.</p>
       </div>
     </div>
     <h3>Кнопки на телефоне</h3>
     <ul class="tkeys">
-      <li><span class="ic huge">⚔</span> Атака. Держи — бьёт без остановки. Можно вести пальцем, чтобы поворачиваться.</li>
-      <li><span class="ic">✋</span> Действие: читать, брать, открыть верстак. Держи — рубить, копать, собирать.</li>
-      <li><span class="ic">⇄</span> Сменить оружие. Можно нажать прямо на слот внизу экрана.</li>
-      <li><span class="ic">⟳</span> Перезарядить.</li>
-      <li><span class="ic">🔦</span> Фонарь вкл/выкл.</li>
-      <li><span class="ic">🩹</span> Лечение: аптечка, если есть, иначе бинт.</li>
-      <li><span class="ic">🏃</span> Бег (переключатель). Или отведи стик до края.</li>
-      <li><span class="ic">🍖</span> Съесть лучшее, что есть в сумке.</li>
-      <li><span class="ic">🔨</span> Стройка: сделать дом базой, ставить заборы, турели, грядки. При установке: <span class="ic">✔</span> поставить, <span class="ic">⟲</span> повернуть, <span class="ic">✕</span> закончить.</li>
-      <li>В машине левый стик — газ и руль, <span class="ic">✋</span> — выйти.</li>
-      <li><span class="ic">🗺</span> Карта. <span class="ic">🎒</span> Сумка и крафт. <span class="ic">❚❚</span> Пауза. <span class="ic">⌂</span> Главное меню. <span class="ic">?</span> Эта справка.</li>
+      <li><span class="ic huge">⚔</span> Атака. Держи — бьёт без остановки. Можно вести пальцем, чтобы поворачиваться. При стройке — поставить.</li>
+      <li><span class="ic">✋</span> Действие: брать, открывать, рубить и копать (держать), сесть в машину и выйти, подсечь рыбу.</li>
+      <li><span class="ic">🔦</span> Фонарь.</li>
+      <li><span class="ic">☰</span> Карта, сумка (еда, лечение, крафт), стройка, пауза, справка, выход в меню.</li>
+      <li>Оружие — нажми на слот внизу. Нажми на текущий слот ещё раз — перезарядка. Бег — отведи стик до края.</li>
     </ul>
     <div class="row"><button class="btn" id="help-close">Понятно</button><button class="btn ghost" id="help-guide">Как крафтить</button></div>
   </div>
@@ -172,6 +167,7 @@
       <button class="btn ghost" id="q-btn">Графика: Средняя</button>
       <button class="btn ghost" id="scare-btn">Скримеры: вкл</button>
       <button class="btn ghost" id="label-btn">Подписи кнопок: вкл</button>
+      <button class="btn ghost" id="voice-btn">Игра слушает тебя: выкл</button>
       <label class="sens" for="sens">Чувствительность обзора <b id="sens-v">1.0×</b><input type="range" id="sens" min="0.4" max="2.5" step="0.1" value="1"></label>
       <button class="btn ghost" id="to-title">В главное меню</button>
     </div>
@@ -201,22 +197,20 @@
 <div id="touch" hidden>
   <div id="stickL" class="stick" hidden><i></i></div>
   <div class="tbar top">
-    <button id="t-help" class="tb sm" aria-label="Справка">?<i>справка</i></button>
-    <button id="t-map" class="tb sm" aria-label="Карта">🗺<i>карта</i></button>
-    <button id="t-inv" class="tb sm" aria-label="Сумка">🎒<i>сумка</i></button>
-    <button id="t-pause" class="tb sm" aria-label="Пауза">❚❚<i>пауза</i></button>
-    <button id="t-build" class="tb sm" aria-label="Стройка">🔨<i>стройка</i></button>
-    <button id="t-home" class="tb sm" aria-label="Главное меню">⌂<i>меню</i></button>
+    <button id="t-menu" class="tb sm" aria-label="Меню">☰</button>
   </div>
   <div class="tbar side">
     <button id="t-atk" class="tb huge" aria-label="Атака">⚔<i>атака</i></button>
     <button id="t-act" class="tb big" aria-label="Действие">✋<i>действие</i></button>
-    <button id="t-swap" class="tb" aria-label="Оружие">⇄<i>оружие</i></button>
-    <button id="t-reload" class="tb" aria-label="Перезарядка">⟳<i>патроны</i></button>
-    <button id="t-light" class="tb" aria-label="Фонарь">🔦<i>фонарь</i></button>
-    <button id="t-heal" class="tb" aria-label="Лечение">🩹<i>лечить</i></button>
-    <button id="t-run" class="tb" aria-label="Бег">🏃<i>бег</i></button>
-    <button id="t-eat" class="tb" aria-label="Еда">🍖<i>есть</i></button>
+    <button id="t-light" class="tb sm" aria-label="Фонарь">🔦<i>фонарь</i></button>
+  </div>
+  <div id="qmenu" hidden>
+    <button class="qb" id="q-map">🗺<span>Карта</span></button>
+    <button class="qb" id="q-inv">🎒<span>Сумка</span></button>
+    <button class="qb" id="q-build">🔨<span>Стройка</span></button>
+    <button class="qb" id="q-pause">❚❚<span>Пауза</span></button>
+    <button class="qb" id="q-help">?<span>Справка</span></button>
+    <button class="qb" id="q-home">⌂<span>Меню</span></button>
   </div>
   <div class="tbar place">
     <button id="t-ok" class="tb big" aria-label="Поставить">✔<i>поставить</i></button>
@@ -231,6 +225,7 @@
 <script src="js/world.js"></script>
 <script src="js/game.js"></script>
 <script src="js/life.js"></script>
+<script src="js/voice.js"></script>
 <script src="js/scene3d.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/ui.js"></script>

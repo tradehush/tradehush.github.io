@@ -895,6 +895,31 @@ function syncBuilds(dt) {
   }
 }
 
+function syncDrop() {
+  const d = G.drop;
+  if (!V.dropG) {
+    const g = new THREE.Group();
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(44, 34, 44), lam(0x3a4a2a, { map: V.tex.wood })); crate.position.y = 17; crate.castShadow = true; g.add(crate);
+    for (const z of [-22.5, 22.5]) { const band = new THREE.Mesh(new THREE.BoxGeometry(46, 6, 1), lam(0x222222)); band.position.set(0, 17, z); g.add(band); }
+    const chute = new THREE.Group();
+    const canopy = new THREE.Mesh(new THREE.SphereGeometry(70, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), lam(0xd8d0c0, { side: THREE.DoubleSide })); canopy.position.y = 160; chute.add(canopy);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const l = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 140, 3), lam(0x888888)); l.position.set(Math.cos(a) * 34, 95, Math.sin(a) * 34); l.rotation.set(Math.sin(a) * 0.45, 0, -Math.cos(a) * 0.45); chute.add(l); }
+    g.add(chute);
+    const flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: V.tex.glow, color: 0xff3018, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true })); flare.scale.setScalar(50); flare.position.y = 40; g.add(flare);
+    g.userData = { chute, flare, crate };
+    V.scene.add(g); V.dropG = g;
+  }
+  const show = !!d && !d.looted && World.map === "forest" && G.state !== "title";
+  V.dropG.visible = show;
+  if (!show) return;
+  V.dropG.position.set(d.x, d.h, d.y);
+  V.dropG.rotation.y = V.time * (d.landed ? 0 : 0.3);
+  V.dropG.userData.chute.visible = !d.landed;
+  V.dropG.userData.flare.visible = d.landed;
+  V.dropG.userData.flare.material.opacity = 0.6 + Math.random() * 0.4;
+  V.dropG.userData.crate.rotation.z = d.landed ? 0.12 : Math.sin(V.time * 2) * 0.1;
+}
+
 // eyes in the dark and the far-away figure (they outlive map changes)
 function buildCreepy() {
   V.watch = [];
@@ -969,6 +994,14 @@ function buildDynamicPools() {
     m.frustumCulled = false; s.add(m); return m;
   };
   V.pts = mk(false); V.glow = mk(true);
+  // smoke: big soft points
+  {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    V.smoke = new THREE.Points(g, new THREE.PointsMaterial({ size: 46, map: V.tex.glow, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.55, depthWrite: false }));
+    V.smoke.frustumCulled = false; s.add(V.smoke);
+  }
   const tg = new THREE.BufferGeometry();
   tg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(64 * 6), 3).setUsage(THREE.DynamicDrawUsage));
   V.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ color: 0xffe6a0, transparent: true, opacity: 0.8 }));
@@ -1267,7 +1300,7 @@ function syncDynamic(dt) {
   const pulse = 0.5 + 0.5 * Math.sin(V.time * 3);
   for (const n of V.notes) { const o = World.inter[n.i]; n.m.material.emissive.setScalar(G.notes.includes(o.key) ? 0.04 : 0.12 + 0.2 * pulse); }
   for (const p of V.pickups) p.m.visible = !World.inter[p.i].taken;
-  for (const s of V.seals) { const o = World.inter[s.i]; s.m.visible = !G.seals.includes(o.seal); s.m.rotation.y += dt; s.m.position.y = s.y + Math.sin(V.time * 2 + s.i) * 2; }
+  for (const s of V.seals) { const o = World.inter[s.i]; s.m.visible = STORY_MODE && !G.seals.includes(o.seal); s.m.rotation.y += dt; s.m.position.y = s.y + Math.sin(V.time * 2 + s.i) * 2; }
   V.altarSeals.visible = G.placed && !!World.altar;
 
   // projectiles
@@ -1306,8 +1339,15 @@ function syncDynamic(dt) {
 
   // particles
   const P = V.pts.geometry.attributes, Q = V.glow.geometry.attributes;
-  let np = 0, ng = 0;
+  let np = 0, ng = 0, ns = 0;
+  const S = V.smoke.geometry.attributes;
   for (const q of G.parts) {
+    if (q.smoke) {
+      if (q.z === undefined) { q.z = 6; q.vz = 70 + Math.random() * 30; }
+      q.z += q.vz * dt; q.x += Math.sin(V.time + q.z * 0.01) * 6 * dt;
+      if (ns < 700) { const k = q.life / q.max; tmpC.set(q.col); S.position.setXYZ(ns, q.x, q.z, q.y); S.color.setXYZ(ns, tmpC.r * k, tmpC.g * k, tmpC.b * k); ns++; }
+      continue;
+    }
     if (q.z === undefined) { q.z = q.glow ? 6 + Math.random() * 10 : 20 + Math.random() * 30; q.vz = q.glow ? 40 + Math.random() * 40 : (Math.random() - 0.2) * 120; }
     q.z += q.vz * dt; if (!q.glow) q.vz -= 300 * dt; if (q.z < 0.5) { q.z = 0.5; q.vz = 0; }
     tmpC.set(q.col);
@@ -1315,7 +1355,9 @@ function syncDynamic(dt) {
     if (q.glow) { if (ng >= 700) continue; Q.position.setXYZ(ng, q.x, q.z, q.y); Q.color.setXYZ(ng, tmpC.r * k, tmpC.g * k, tmpC.b * k); ng++; }
     else { if (np >= 700) continue; P.position.setXYZ(np, q.x, q.z, q.y); P.color.setXYZ(np, tmpC.r, tmpC.g, tmpC.b); np++; }
   }
-  V.pts.geometry.setDrawRange(0, np); V.glow.geometry.setDrawRange(0, ng);
+  V.pts.geometry.setDrawRange(0, np); V.glow.geometry.setDrawRange(0, ng); V.smoke.geometry.setDrawRange(0, ns);
+  S.position.needsUpdate = S.color.needsUpdate = true;
+  syncDrop();
   P.position.needsUpdate = P.color.needsUpdate = Q.position.needsUpdate = Q.color.needsUpdate = true;
 
   const T = V.tracers.geometry.attributes.position;
@@ -1392,7 +1434,8 @@ function syncLights(dt) {
   for (const f of G.fires) cand.push({ x: f.x, y: f.y, h: 20 + Math.random() * 4, r: 330, i: 3 * (0.8 + 0.2 * Math.sin(V.time * 13 + f.x) * Math.random()), c: 0xff9040 });
   for (const l of World.lights) cand.push({ x: l.x + (l.torch ? 0 : l.ox), y: l.y + (l.torch ? 0 : l.oy), h: l.torch ? 84 : WALL_H - 32, r: l.r * 1.3, i: 3 * (1 - l.flick + l.flick * Math.sin(V.time * 9 + l.x)), c: new THREE.Color(`rgb(${l.col})`).getHex() });
   for (const pr of G.projs) if (pr.kind === "firezone") cand.push({ x: pr.x, y: pr.y, h: 20, r: 300, i: 4 * Math.min(1, pr.life / 2) * (0.8 + Math.random() * 0.3), c: 0xff8020 });
-  for (const o of World.inter) if (o.type === "seal" && !G.seals.includes(o.seal)) cand.push({ x: o.x, y: o.y, h: 30, r: 120, i: 2, c: o.seal === "heart" ? 0xff3020 : o.seal === "eye" ? 0x50c8ff : 0xfff0d0 });
+  if (G.drop && G.drop.landed && !G.drop.looted && World.map === "forest") cand.push({ x: G.drop.x, y: G.drop.y, h: 20, r: 260, i: 2.5 * (0.7 + Math.random() * 0.4), c: 0xff3018 });
+  for (const o of World.inter) if (STORY_MODE && o.type === "seal" && !G.seals.includes(o.seal)) cand.push({ x: o.x, y: o.y, h: 30, r: 120, i: 2, c: o.seal === "heart" ? 0xff3020 : o.seal === "eye" ? 0x50c8ff : 0xfff0d0 });
   if (G.placed && World.altar) cand.push({ x: World.altar.x, y: World.altar.y, h: 60, r: 380, i: 2.5 * (0.8 + 0.2 * Math.sin(V.time * 3)), c: 0xc02010 });
   if (G.boss && !G.bossDead) cand.push({ x: G.boss.x, y: G.boss.y, h: 150, r: 260, i: 2.5, c: 0xff2008 });
   for (const c of cand) c.d = dist2(c.x, c.y, p.x, p.y);

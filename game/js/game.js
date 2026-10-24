@@ -68,7 +68,7 @@ function newGame() {
     boss: null, endT: 0, bossDead: false, spawnT: 8, hallT: 25, lightOff: 0, maps: {}, watchers: [], figure: null, ambT: 8, watchT: 20, figT: 70,
     storm: 0, stormOn: false, stormT: 200 + Math.random() * 200, bolt: 0, boltT: 6, interf: 0, scare: null, scareCd: 30, spotCd: 0, tips: [], tip: null });
   G.p = newPlayer();
-  Object.assign(G, { car: makeCar(), base: null, builds: [], place: null, fishing: null, drive: false, lastStep: 0, objBanner: null, lastRegion: null });
+  Object.assign(G, { car: makeCar(), base: null, builds: [], place: null, fishing: null, drive: false, lastStep: 0, objBanner: null, lastRegion: null, drop: null, nextDrop: 3, raidDay: 0, voiceCd: 0 });
 }
 
 // what changes on a map (resources, crates, fires, traps) is kept per map while you are elsewhere
@@ -99,7 +99,7 @@ function save() {
     const p = G.p;
     G.maps[World.map] = snapMap();
     const data = { v: 3, seed: G.seed, map: World.map, maps: G.maps, t: G.t, day: G.day, step: G.step, inv: G.inv, owned: G.owned, mag: G.mag, wi: G.wi, notes: G.notes,
-      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive,
+      seals: G.seals, placed: G.placed, tips: G.tips, discovered: G.discovered, car: G.car, base: G.base, drive: G.drive, drop: G.drop, nextDrop: G.nextDrop, raidDay: G.raidDay,
       p: { x: p.x, y: p.y, a: p.a, hp: p.hp, san: p.san, bat: p.bat, food: p.food, light: p.light } };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
@@ -116,7 +116,8 @@ function load() {
   G.seed = d.seed;
   generateWorld(d.seed, d.map || "forest");
   Object.assign(G, { t: d.t, day: d.day, step: d.step, inv: d.inv, owned: d.owned, mag: d.mag, wi: d.wi, notes: d.notes, seals: d.seals,
-    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map });
+    placed: d.placed, discovered: d.discovered || {}, tips: d.tips || [], maps: d.maps || {}, car: Object.assign(makeCar(), d.car || {}), base: d.base || null, drive: !!d.drive && d.car && d.car.map === d.map, drop: d.drop || null, nextDrop: d.nextDrop || 3, raidDay: d.raidDay || 0 });
+  if (G.drop && G.drop.landed && !G.drop.looted) placeDropCrate();
   applyMap(G.maps[World.map]);
   Object.assign(G.p, d.p);
   G.p.light = true;
@@ -348,7 +349,7 @@ function spawnTick(dt) {
   const cap = World.indoor ? 5 + G.day : night ? Math.min(7 + G.day * 2, 18) : 2;
   if (free >= cap) return;
   // the very first minutes are calm
-  if (G.step < 1 && !night) return;
+  if ((G.clock || 0) < 60 && !night) return;
   const s = World.indoor ? freeSpot(G.p.x, G.p.y, 450, 800) : freeSpot(G.p.x, G.p.y, 640, 950);
   if (!s) return;
   const type = pickType();
@@ -480,7 +481,12 @@ function updateMonsters(dt) {
 
     if (m.state === "chase") {
       let dir = null;
-      if (m.los) dir = { x: dx / d, y: dy / d };
+      if (m.raid && G.base && dist2(p.x, p.y, G.base.x, G.base.y) > 1500 * 1500) {
+        // raiders head for the base and tear down whatever is in the way
+        const bx = G.base.x - m.x, by = G.base.y - m.y, bl = Math.hypot(bx, by) || 1;
+        dir = bl > 60 ? { x: bx / bl, y: by / bl } : { x: 0, y: 0 };
+      }
+      else if (m.los) dir = { x: dx / d, y: dy / d };
       else dir = flowDir(m.x, m.y) || { x: dx / d, y: dy / d };
       if (m.type === "spitter" && m.los) {
         if (d < 200) dir = { x: -dx / d, y: -dy / d };
@@ -560,7 +566,7 @@ function updateMonsters(dt) {
   // despawn far / daylight
   G.mons = G.mons.filter(m => {
     if (m.dead) return false;
-    if (m.guard || m.type === "boss") return true;
+    if (m.guard || m.type === "boss" || m.camp) return true;
     const d2p = dist2(m.x, m.y, p.x, p.y);
     if (d2p > 1500 * 1500) return false;
     if (G.night < 0.2 && m.state !== "chase" && d2p > 750 * 750 && Math.random() < dt * 0.3) return false;
@@ -702,7 +708,8 @@ function findInteract() {
   const fx = p.x + Math.cos(p.a) * 14, fy = p.y + Math.sin(p.a) * 14;
   for (const o of World.inter) {
     if (o.taken) continue;
-    if (o.type === "seal" && G.seals.includes(o.seal)) continue;
+    if (o.type === "seal" && (!STORY_MODE || G.seals.includes(o.seal))) continue;
+    if (o.type === "altar" && !STORY_MODE) continue;
     const d = Math.hypot(o.x - fx, o.y - fy);
     if (d < o.r && d < bd && !wallBetween(p.x, p.y, o.x, o.y)) { bd = d - 10; best = o; }
   }
@@ -723,6 +730,7 @@ function interactLabel(o) {
   if (o.type === "build") return buildLabel(o.b);
   if (o.type === "fishing") return "Рыбачить";
   if (o.type === "loot") return "Взять: " + o.label;
+  if (o.type === "airdrop") return "Открыть аирдроп";
   switch (o.type) {
     case "note": return "Читать: " + NOTES[o.key].t;
     case "crate": return o.full ? "Обыскать ящик" : "Пустой ящик";
@@ -797,6 +805,7 @@ function doInteract(o) {
       startBoss();
       return;
     case "car": carInteract(); return;
+    case "airdrop": openAirdrop(o); return;
     case "build": buildUse(o.b); return;
     case "fishing": startFishing(o); return;
     case "loot":
@@ -896,6 +905,7 @@ function quickHeal() { if (!useItem("medkit") && !(G.inv.medkit > 0)) useItem("b
 
 function readNote(key) {
   if (!G.notes.includes(key)) G.notes.push(key);
+  if (!STORY_MODE) return;
   if (key === "anya1" && G.step <= 1) { G.step = 2; save(); }
   if (key === "head" && G.step < 4) { G.step = G.seals.length >= 3 ? 5 : 4; save(); }
 }
@@ -914,6 +924,7 @@ function routeTo(map) {
 }
 
 function objectiveTarget() {
+  if (!STORY_MODE) return G.drop && !G.drop.looted && World.map === "forest" ? G.drop : null;
   const H = id => World.houses.find(h => h.id === id);
   if (G.step <= 3 || G.step === 5) { if (World.map !== "forest") return routeTo("forest"); }
   switch (G.step) {
@@ -1064,7 +1075,7 @@ function update(dt) {
   G.inside = insideHouse(p.x, p.y);
   if (G.step === 0 && G.inside && G.inside.id === "forester") { G.step = 1; toast("Дом лесника. Здесь кто-то жил совсем недавно.", 3.5); }
   for (const h of World.houses) if (!G.discovered[h.id] && dist2(p.x, p.y, h.x + h.w / 2, h.y + h.h / 2) < 520 * 520) { G.discovered[h.id] = 1; toast(h.name, 2.5); }
-  if (G.inside && !G.base && G.step >= 2) tip("claim", "Любой дом можно сделать своей базой и укреплять. Открой стройку, когда стоишь внутри дома.", "🔨");
+  if (G.inside && !G.base && (G.clock || 0) > 20) tip("claim", "Любой дом можно сделать своей базой и укреплять. Открой стройку, когда стоишь внутри дома.", "🔨");
   if (World.altar && !G.discovered.altar && dist2(p.x, p.y, World.altar.x, World.altar.y) < 450 * 450) { G.discovered.altar = 1; toast("Капище", 2.5); Sound.sting(); }
 
   if (G.drive && carHere()) { driveCar(dt, inp); } else {
@@ -1167,7 +1178,7 @@ function update(dt) {
     const reg = regionAt(p.x, p.y), name = reg ? reg.name : null;
     if (name !== G.lastRegion) { if (name) toast(name, 2.5); G.lastRegion = name; }
   }
-  if (G.step !== G.lastStep) { G.lastStep = G.step; if (STEPS[G.step] && G.step < 7) G.objBanner = { text: STEPS[G.step].t, t: 6 }; }
+  if (STORY_MODE && G.step !== G.lastStep) { G.lastStep = G.step; if (STEPS[G.step] && G.step < 7) G.objBanner = { text: STEPS[G.step].t, t: 6 }; }
   if (G.objBanner) { G.objBanner.t -= dt; if (G.objBanner.t <= 0) G.objBanner = null; }
 
   // sanity
@@ -1205,6 +1216,8 @@ function update(dt) {
   updateHazards(dt);
   updateCreepy(dt);
   updateBuilds(dt);
+  updateAirdrop(dt);
+  updateRaid(dt);
   updateProjs(dt);
 
   for (const q of G.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.92; q.vy *= 0.92; q.life -= dt; }

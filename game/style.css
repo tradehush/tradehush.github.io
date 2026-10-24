@@ -131,8 +131,14 @@ kbd { font: 12px ui-monospace, monospace; background: #222; border: 1px solid #4
 }
 
 .tbar.place { display: none; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); gap: 14px; align-items: flex-end; }
-#touch.placing #t-reload, #touch.placing #t-heal, #touch.placing #t-run, #touch.placing #t-eat, #touch.placing #t-swap { display: none; }
+#touch.placing #t-light { display: none; }
 #touch.placing .tbar.place { display: flex; }
-#touch.driving #t-atk, #touch.driving #t-swap, #touch.driving #t-reload, #touch.driving #t-heal, #touch.driving #t-run, #touch.driving #t-eat, #touch.driving #t-build { display: none; }
+#touch.driving #t-atk { display: none; }
 #touch.nolabels .tb i { display: none; }
 .tb.hint { border-color: #ffe080; box-shadow: 0 0 0 4px rgba(255,224,128,.35); animation: ready .8s ease-in-out infinite; }
+
+#qmenu { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); right: calc(env(safe-area-inset-right, 0px) + 12px); display: grid; grid-template-columns: repeat(3, 64px); gap: 8px; padding: 10px; background: rgba(10,10,8,.85); border: 1px solid rgba(216,200,144,.25); border-radius: 10px; pointer-events: auto; z-index: 12; }
+.qb { display: grid; place-items: center; gap: 2px; height: 60px; border-radius: 8px; border: 1px solid rgba(216,200,144,.2); background: rgba(255,255,255,.03); color: var(--ink); font-size: 22px; padding: 0; }
+.qb span { font: 10px ui-monospace, monospace; color: var(--muted); }
+.qb:active { background: rgba(216,200,144,.2); }
+.tbar.side { width: 170px; }

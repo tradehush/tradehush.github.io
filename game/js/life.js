@@ -302,3 +302,76 @@ function updateFishing(dt, pressed, moving) {
     if (f.t <= 0) { f.bite = 1.1; Sound.bite(); }
   }
 }
+
+// --- airdrops: every third day a crate comes down on a parachute ---------------------
+
+function launchAirdrop() {
+  const center = G.base && G.base.map === "forest" ? G.base : G.p;
+  for (let i = 0; i < 60; i++) {
+    const a = Math.random() * Math.PI * 2, d = 1800 + Math.random() * 1800;
+    const x = clamp(center.x + Math.cos(a) * d, 400, World.W - 400), y = clamp(center.y + Math.sin(a) * d, 400, World.H - 400);
+    if (World.map === "forest") {
+      const ci = Math.floor(y / World.ncell) * World.nw + Math.floor(x / World.ncell);
+      if (World.nav[ci] || inSwamp(x, y) || insideHouse(x, y, 80)) continue;
+    }
+    G.drop = { x, y, h: 1500, landed: false, looted: false, day: G.day };
+    break;
+  }
+  if (!G.drop) return;
+  Sound.plane();
+  toast("✈ Слышен самолёт… сброшен груз!", 4);
+  tip("airdrop", "Аирдроп! Стрелка у часов показывает, где он упадёт. Красный дым видно издалека. Возле груза могут ждать твари.", "✈");
+}
+
+function placeDropCrate() {
+  if (World.map !== "forest" || !G.drop || G.drop.looted) return;
+  if (World.inter.some(o => o.type === "airdrop")) return;
+  inter({ type: "airdrop", x: G.drop.x, y: G.drop.y, r: 56 });
+}
+
+function updateAirdrop(dt) {
+  if (G.day >= G.nextDrop && G.t > 12 / 24 && World.map === "forest") { G.nextDrop = G.day + 3; launchAirdrop(); }
+  const d = G.drop;
+  if (!d || d.looted) return;
+  if (!d.landed) {
+    d.h -= dt * 60;
+    if (d.h <= 0) {
+      d.h = 0; d.landed = true;
+      placeDropCrate();
+      if (World.map === "forest" && dist2(G.p.x, G.p.y, d.x, d.y) < 1400 * 1400) Sound.carHit();
+      // something smelled it too
+      for (let i = 0; i < 2 + Math.floor(G.day / 3); i++) { const s = freeSpot(d.x, d.y, 120, 300, false, false); if (s && World.map === "forest") { const m = spawnMonster(pickType(), s.x, s.y, { camp: true }); m.aggro = 0; } }
+    }
+  } else if (World.map === "forest" && Math.random() < dt * 25) {
+    G.parts.push({ x: d.x + (Math.random() - 0.5) * 10, y: d.y + (Math.random() - 0.5) * 10, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 4, max: 4, col: Math.random() < 0.7 ? "#c02818" : "#e05030", size: 7, smoke: true });
+  }
+}
+
+function openAirdrop(o) {
+  o.taken = true; G.drop.looted = true;
+  for (const [k, a, b, ch] of AIRDROP_LOOT) if (Math.random() < ch) addItem(k, a + Math.floor(Math.random() * (b - a + 1)));
+  const missing = ["bat", "machete", "pistol", "shotgun", "crossbow"].filter(w => !G.owned.includes(w));
+  if (missing.length && Math.random() < 0.5) { const w = missing[Math.floor(Math.random() * missing.length)]; giveWeapon(w); const W = WEAPONS[W_IDX[w]]; if (W.mag) G.mag[w] = W.mag; toast(`В аирдропе оружие: ${W.n}!`, 4); }
+  Sound.craft(); G.shake = 4;
+  save();
+}
+
+// --- night raids: once a night the forest comes for your base -----------------------
+
+function updateRaid(dt) {
+  if (!G.base || G.base.map !== World.map || World.indoor) return;
+  const h = G.t * 24;
+  if (h >= 0.5 && h < 3 && G.raidDay !== G.day) {
+    G.raidDay = G.day;
+    const n = 3 + G.day * 2;
+    for (let i = 0; i < n; i++) {
+      const s = freeSpot(G.base.x, G.base.y, 800, 1100, false, false);
+      if (!s) continue;
+      const m = spawnMonster(pickType(), s.x, s.y, { guard: true, raid: true });
+      m.aggro = 99;
+    }
+    Sound.farScream(0); Sound.sting();
+    toast("☠ Набег! Твари идут к базе", 4);
+    tip("raid", "Каждую ночь твари приходят к базе. Заборы, колья, турели и свет помогут её удержать.", "🔨");
+  }
+}

@@ -68,7 +68,7 @@ const WICON = { knife: "🔪", axe: "🪓", bat: "🏏", machete: "🗡", pistol
 
 // a small dial: amber for day, blue for night, a hand for the time, the time under it
 function drawClock(ctx, cx, cy, u) {
-  const r = 17 * u, h = G.t * 24;
+  const r = 13 * u, h = G.t * 24;
   ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(cx, cy, r + 3 * u, 0, 7); ctx.fill();
   const ang = hh => -Math.PI / 2 + (hh / 24) * Math.PI * 2 + Math.PI; // midnight at the bottom
   ctx.lineWidth = 4 * u;
@@ -101,9 +101,12 @@ function drawHUD(ctx) {
   const font = (sz, b = "bold") => ctx.font = `${b} ${sz * u}px ui-monospace, Menlo, Consolas, monospace`;
 
   // vitals: icon + thin bar, nothing else
-  const vit = [["♥", p.hp, "#b52a2a"], ["⚡", p.sta, "#c8a43a"], ["◉", p.san, "#8a5ac0"], ["🍖", p.food, "#9a7a40"], ["🔦", p.bat, p.light ? "#e8e0a0" : "#6a6a5a"]];
-  let vy = pad + 4 * u;
-  const bw = 84 * u, bh = 5 * u;
+  // only what matters right now: full stamina and a full flashlight stay hidden
+  const vit = [["♥", p.hp, "#b52a2a"], ["◉", p.san, "#8a5ac0"], ["🍖", p.food, "#9a7a40"]];
+  if (p.sta < 99) vit.push(["⚡", p.sta, "#c8a43a"]);
+  if (p.bat < 99 || !p.light) vit.push(["🔦", p.bat, p.light ? "#e8e0a0" : "#6a6a5a"]);
+  let vy = pad + 2 * u;
+  const bw = 58 * u, bh = 4 * u;
   for (const [ic, v, c] of vit) {
     const warn = v < 25 && Math.sin(R.time * 7) > 0;
     font(11, "");
@@ -111,9 +114,14 @@ function drawHUD(ctx) {
     ctx.fillStyle = warn ? "#ff6050" : "#efe6c8"; ctx.fillText(ic, pad, vy);
     ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(pad + 17 * u, vy - bh / 2, bw, bh);
     ctx.fillStyle = c; ctx.fillRect(pad + 17 * u, vy - bh / 2, bw * clamp(v, 0, 100) / 100, bh);
-    vy += 13 * u;
+    vy += 11 * u;
   }
   ctx.globalAlpha = 1;
+  if (Voice.on) {
+    font(10, ""); ctx.fillStyle = Voice.heardT > 0 ? "#ff6050" : "rgba(230,225,210,0.55)";
+    ctx.fillText("🎙" + (Voice.heardT > 0 ? " «" + Voice.heard.slice(0, 30) + "»" : ""), pad, vy + 2 * u);
+    Voice.heardT -= 1 / 60;
+  }
   if (G.inv.battery) { font(10, ""); ctx.fillStyle = "rgba(230,225,210,0.6)"; ctx.fillText("+" + G.inv.battery, pad + 17 * u + bw + 4 * u, vy - 13 * u); }
 
   // time of day
@@ -143,11 +151,11 @@ function drawHUD(ctx) {
   }
 
   // weapons: icons with ammo
-  const slot = (touch ? 40 : 46) * u, gap = 5 * u, n = G.owned.length;
+  const slot = (touch ? 36 : 42) * u, gap = 4 * u, n = G.owned.length;
   const hcx = touch && W / u > 600 ? (W - 230 * u) / 2 : W / 2;
   const hx = hcx - (n * slot + (n - 1) * gap) / 2, hy = H - pad - slot;
   R.hotbar = { x: hx / u, y: hy / u, slot: slot / u, gap: gap / u, n };
-  if (!G.drive) G.owned.forEach((id, i) => {
+  if (!G.drive && n > 1) G.owned.forEach((id, i) => {
     const w = WEAPONS[W_IDX[id]], x = hx + i * (slot + gap), on = i === G.wi;
     ctx.fillStyle = on ? "rgba(216,200,144,0.22)" : "rgba(0,0,0,0.45)"; ctx.fillRect(x, hy, slot, slot);
     ctx.strokeStyle = on ? "#d8c890" : "rgba(255,255,255,0.08)"; ctx.lineWidth = 1.5 * u; ctx.strokeRect(x, hy, slot, slot);
@@ -281,6 +289,7 @@ function drawMap(ctx) {
   ctx.font = `${14 * u}px serif`; ctx.textAlign = "center";
   if (G.base && G.base.map === World.map) { ctx.fillText("⌂", ox + G.base.x * k, oy + G.base.y * k); ctx.strokeStyle = "rgba(120,200,120,0.5)"; ctx.beginPath(); ctx.arc(ox + G.base.x * k, oy + G.base.y * k, BASE_R * k, 0, 7); ctx.stroke(); }
   if (carHere() && !G.drive) ctx.fillText("🚗", ox + G.car.x * k, oy + G.car.y * k);
+  if (G.drop && !G.drop.looted && World.map === "forest") ctx.fillText("📦", ox + G.drop.x * k, oy + G.drop.y * k);
   ctx.font = `bold ${11 * u}px ui-monospace, monospace`;
   for (const f of G.fires) { ctx.fillStyle = "#ff8a20"; ctx.beginPath(); ctx.arc(ox + f.x * k, oy + f.y * k, 3 * u, 0, 7); ctx.fill(); }
   const p = G.p;

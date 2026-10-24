@@ -8,7 +8,7 @@ const Input = {
   sprintToggle: false, mvId: null, lookId: null, mvO: null, lookP: null,
 };
 
-const Settings = { scares: true, sens: 1, labels: "auto" };
+const Settings = { scares: true, sens: 1, labels: "auto", voice: false };
 try { Object.assign(Settings, JSON.parse(localStorage.getItem("bp.settings") || "{}")); } catch (e) {}
 function saveSettings() { try { localStorage.setItem("bp.settings", JSON.stringify(Settings)); } catch (e) {} }
 
@@ -125,6 +125,7 @@ const UI = {
     $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл");
     $("#q-btn").textContent = "Графика: " + QUALITY[V.quality].n;
     $("#scare-btn").textContent = "Скримеры: " + (Settings.scares ? "вкл" : "выкл");
+    $("#voice-btn").textContent = "Игра слушает тебя: " + (Voice.on ? "вкл 🎙" : "выкл");
     $("#label-btn").textContent = "Подписи кнопок: " + ({ auto: "сначала", on: "всегда", off: "выкл" }[Settings.labels] || "сначала");
     $("#sens").value = Settings.sens;
     $("#sens-v").textContent = Settings.sens.toFixed(1) + "×";
@@ -198,17 +199,19 @@ function startIntro() {
   let i = 0;
   const box = $("#intro"), txt = $("#intro-t");
   box.hidden = false;
-  const show = () => { txt.classList.remove("in"); void txt.offsetWidth; txt.textContent = INTRO[i]; txt.classList.add("in"); };
+  const lines = STORY_MODE ? INTRO : INTRO_SANDBOX;
+  const show = () => { txt.classList.remove("in"); void txt.offsetWidth; txt.textContent = lines[i]; txt.classList.add("in"); };
   show();
   box.onclick = () => {
     i++;
-    if (i >= INTRO.length) { box.onclick = null; startPlay(); return; }
+    if (i >= lines.length) { box.onclick = null; startPlay(); return; }
     show();
   };
 }
 
 function enterPlay() {
   UI.closeAll();
+  if (Settings.voice && !Voice.on) Voice.start();
   G.state = "play";
   $("#touch").hidden = !Input.touch;
   requestLock();
@@ -218,7 +221,7 @@ function enterPlay() {
 function startPlay() {
   enterPlay();
   G.p.a = -Math.PI / 2 + 0.25;
-  toast("Дорога ведёт на север, к дому лесника.", 4);
+  toast(STORY_MODE ? "Дорога ведёт на север, к дому лесника." : "Найди дом, сделай его базой и продержись.", 4);
   tip("start", Input.touch ? "Левый палец — ходить, правый — осматриваться. ⚔ — удар, ✋ — действие. Что делает каждая кнопка — «?» вверху справа." : "WASD — ходить, мышь — смотреть, ЛКМ — удар, E — действие, Tab — сумка. Esc — пауза и выход в меню.");
 }
 
@@ -323,9 +326,11 @@ function setupTouch() {
     if (!Input.touch) { Input.touch = true; if (G.state === "play") $("#touch").hidden = false; }
     if (G.state !== "play" || UI.modal) return;
     if (G.showMap) { G.showMap = false; return; }
+    $("#qmenu").hidden = true;
     const hb = R.hotbar;
     if (hb && e.clientY >= hb.y && e.clientY <= hb.y + hb.slot && e.clientX >= hb.x && e.clientX <= hb.x + hb.n * (hb.slot + hb.gap)) {
-      switchWeapon(Math.floor((e.clientX - hb.x) / (hb.slot + hb.gap)));
+      const i = Math.floor((e.clientX - hb.x) / (hb.slot + hb.gap));
+      if (i === G.wi) startReload(); else switchWeapon(i);
       return;
     }
     if (e.clientX < innerWidth * 0.42 && Input.mvId == null) { Input.mvId = e.pointerId; Input.mvO = { x: e.clientX, y: e.clientY }; place(Input.mvO, e.clientX, e.clientY); }
@@ -370,20 +375,18 @@ function setupTouch() {
   atk.addEventListener("pointermove", e => { if (atkP && G.state === "play") { look(e.clientX - atkP.x, e.clientY - atkP.y, 0.0045); atkP = { x: e.clientX, y: e.clientY }; } });
   btn("#t-act", () => { G.input.interact = true; }, () => { G.input.interact = false; });
   btn("#t-light", () => toggleLight());
-  btn("#t-reload", () => startReload());
-  btn("#t-swap", () => cycleWeapon(1));
-  btn("#t-heal", () => quickHeal());
-  btn("#t-inv", () => UI.openInv());
-  btn("#t-map", () => { G.showMap = !G.showMap; });
-  btn("#t-pause", () => UI.pause());
-  btn("#t-home", () => { releaseAll(); UI.askExit(); });
-  btn("#t-help", () => { releaseAll(); UI.open("help"); UI.helpBack = "play"; });
-  btn("#t-build", () => { releaseAll(); UI.openBuild(); });
+  const qmenu = $("#qmenu");
+  const q = (id, fn) => btn(id, () => { qmenu.hidden = true; releaseAll(); fn(); });
+  btn("#t-menu", () => { qmenu.hidden = !qmenu.hidden; });
+  q("#q-map", () => { G.showMap = !G.showMap; });
+  q("#q-inv", () => UI.openInv());
+  q("#q-build", () => UI.openBuild());
+  q("#q-pause", () => UI.pause());
+  q("#q-help", () => { UI.open("help"); UI.helpBack = "play"; });
+  q("#q-home", () => UI.askExit());
   btn("#t-ok", () => placeBuild());
   btn("#t-rot", () => { if (G.place) G.place.rot = 1 - G.place.rot; });
   btn("#t-cancel", () => { G.place = null; });
-  btn("#t-eat", () => quickEat());
-  btn("#t-run", () => { Input.sprintToggle = !Input.sprintToggle; G.input.sprint = Input.sprintToggle; $("#t-run").classList.toggle("on", Input.sprintToggle); });
 }
 
 // --- boot -------------------------------------------------------------------------------
@@ -431,6 +434,11 @@ function boot() {
   $("#p-help").onclick = () => { UI.open("help"); UI.helpBack = "pause"; };
   $("#snd-btn").onclick = () => { Sound.init(); Sound.toggleMute(); $("#snd-btn").textContent = "Звук: " + (Sound.muted ? "выкл" : "вкл"); };
   $("#q-btn").onclick = () => { const order = ["low", "mid", "high"]; setQuality(order[(order.indexOf(V.quality) + 1) % 3]); UI.syncSettings(); };
+  $("#voice-btn").onclick = () => {
+    if (Voice.on) { Voice.stop(); Settings.voice = false; }
+    else if (Voice.start()) { Settings.voice = true; toast("🎙 Лес слушает тебя…", 3); }
+    saveSettings(); UI.syncSettings();
+  };
   $("#label-btn").onclick = () => { const o = ["auto", "on", "off"]; Settings.labels = o[(o.indexOf(Settings.labels) + 1) % 3]; saveSettings(); UI.syncSettings(); };
   $("#scare-btn").onclick = () => { Settings.scares = !Settings.scares; saveSettings(); UI.syncSettings(); };
   $("#sens").oninput = e => { Settings.sens = +e.target.value; saveSettings(); $("#sens-v").textContent = Settings.sens.toFixed(1) + "×"; };
@@ -451,7 +459,7 @@ function boot() {
 
   toTitle();
   const tAct = $("#t-act"), touchRoot = $("#touch"), hintBtns = [...document.querySelectorAll("#touch .tb")];
-  const TIP_BTN = { "✋": "t-act", "⚔": "t-atk", "🔨": "t-build", "🎒": "t-inv", "🔦": "t-light", "🩹": "t-heal", "🍖": "t-eat", "✔": "t-ok", "⛽": "t-act", "🔧": "t-act", "🎣": "t-act", "🌱": "t-build" };
+  const TIP_BTN = { "✋": "t-act", "⚔": "t-atk", "🔨": "t-menu", "🎒": "t-menu", "🔦": "t-light", "🩹": "t-menu", "🍖": "t-menu", "✔": "t-ok", "⛽": "t-act", "🔧": "t-act", "🎣": "t-act", "🌱": "t-menu", "✈": "t-menu" };
   let last = performance.now();
   const frame = now => {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;

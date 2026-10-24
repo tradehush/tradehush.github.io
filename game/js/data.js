@@ -112,6 +112,23 @@ const MAPS = {
 const MAP_LINKS = { forest: ["catacombs", "mine", "bunker"], catacombs: ["forest"], mine: ["forest"], bunker: ["forest"] };
 const SEAL_MAP = { bone: "catacombs", heart: "forest", eye: "forest" };
 
+// The story (seals, the Master of the forest, endings) is kept but switched off for now:
+// the game runs as a sandbox — gather, build, defend the base, wait for airdrops.
+const STORY_MODE = false;
+
+const INTRO_SANDBOX = [
+  "Чёрная Сосна. Деревня, из которой ушли все.",
+  "Днём лес молчит. Ночью он выходит из-за деревьев.",
+  "Добывай, строй, укрепляй дом. Раз в три дня с неба сбрасывают груз — успей забрать его первым.",
+  "Продержись.",
+];
+
+// what an airdrop crate holds: [item, min, max, chance]
+const AIRDROP_LOOT = [
+  ["ammo9", 10, 20, 1], ["shells", 4, 8, 0.7], ["medkit", 1, 2, 1], ["bandage", 2, 4, 0.8], ["canned", 2, 4, 1],
+  ["battery", 2, 3, 0.9], ["fuel", 1, 2, 0.7], ["parts", 1, 3, 0.6], ["powder", 2, 4, 0.6], ["molotov", 1, 2, 0.5], ["bolts", 5, 10, 0.4],
+];
+
 const INTRO = [
   "Октябрь.",
   "Три недели назад моя младшая сестра Аня уехала в заброшенную деревню Чёрная Сосна — собирать фольклор для диплома.",

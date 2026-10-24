@@ -180,6 +180,7 @@ const Sound = (() => {
     turret(d2) { const v = Math.max(0.05, 0.5 - Math.sqrt(d2) / 1400); noise(0.18, { type: "bandpass", freq: 1800, q: 1, vol: v, attack: 0.001 }); tone(140, 0.08, { type: "square", vol: v * 0.3, freqEnd: 60 }); },
     splash() { noise(0.4, { type: "lowpass", freq: 1500, freqEnd: 300, vol: 0.3, attack: 0.01 }); },
     bite() { noise(0.15, { type: "bandpass", freq: 1200, q: 3, vol: 0.4 }); tone(900, 0.12, { vol: 0.15 }); tone(1300, 0.12, { vol: 0.12, when: 0.12 }); },
+    plane() { noise(9, { type: "lowpass", freq: 260, vol: 0.35, attack: 2.5 }); tone(85, 9, { type: "sawtooth", vol: 0.05, freqEnd: 70, attack: 2.5 }); },
     bossRoar() { tone(45, 2, { type: "sawtooth", vol: 0.5, freqEnd: 30, attack: 0.2 }); noise(2, { type: "lowpass", freq: 500, vol: 0.6, attack: 0.3 }); },
   };
 })();

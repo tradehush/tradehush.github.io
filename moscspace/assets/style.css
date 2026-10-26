@@ -772,3 +772,6 @@ body.modal-lock { overflow: hidden; }
 .slots-head .small { white-space: nowrap; }
 .bar-row { grid-template-columns: 118px minmax(0, 1fr) 84px; }
 .first-screen .proof { max-width: 680px; }
+.pic-pc-18 { background: url("podcast-18.jpg") center / cover no-repeat, #2b1a4a; }
+.pic-pc-28 { background: url("podcast-28.jpg") center / cover no-repeat, #2b1a4a; }
+.pic-pc-45 { background: url("podcast-45.jpg") center / cover no-repeat, #2b1a4a; }

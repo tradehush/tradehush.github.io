@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("ms_theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <title>Карта и AI-помощник — MoscSpace</title>
 <meta name="description" content="Аренда помещений в Москве — MoscSpace">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
@@ -16,11 +17,12 @@
   <div class="wrap">
     <a class="logo" href="index.html">MoscSpace</a>
     <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
-    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="about.html">О нас</a></nav>
     <div class="header-contacts">
-      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div><a class="phone" href="tel:89997655467">8 999 - 765 - 54 - 67</a><br><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a></div>
       <div class="addr"><b>Тверская, 21</b><br>Москва</div>
-      <a class="account-link" href="register.html">Войти</a>
+      <button class="theme-toggle" type="button" aria-label="Сменить тему" title="Сменить тему"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>
+      <a class="account-link" href="account.html" data-auth>Войти</a>
     </div>
   </div>
 </header>
@@ -33,26 +35,26 @@
     <div class="map-note hidden" id="map-note">Карта-подложка не загрузилась. Откройте сайт с хостинга (например, Netlify) — там будет полная карта Москвы.</div>
   </div>
   <div class="assistant">
-    <h2 style="font-size:26px">Привет! Я твой AI-помощник</h2>
-    <p class="small muted">Напиши мне, например: «Нужен офис на 10 человек у метро Чкаловская на среду», и я выберу лучшие варианты. Рядом — карта Москвы с расположением всех свободных помещений для аренды.</p>
+    <div class="chat-head"><span class="bot-ava" aria-hidden="true">AI</span><div><h2>AI-помощник MoscSpace</h2><span class="online">онлайн · подбирает за секунды</span></div></div>
     <div class="chips">
-      <button class="chip" type="button">Нужен офис на 10 человек у метро Чкаловская на среду</button>
+      <button class="chip" type="button">Коворкинг на 10 человек</button>
+      <button class="chip" type="button">Офис на 10 человек у метро Чкаловская на среду</button>
       <button class="chip" type="button">Склад от 300 м² до 500 тыс</button>
+      <button class="chip" type="button">Студия для подкаста у Маяковской</button>
       <button class="chip" type="button">Помещение под кафе в центре</button>
-      <button class="chip" type="button">Переговорная на 30 человек</button>
     </div>
-    <div class="chat" id="chat"><div class="msg bot">Здравствуйте! Опишите, какое помещение вы ищете — тип, количество человек или площадь, бюджет и метро.</div></div>
-    <form class="chat-form" id="chat-form"><input class="input" name="q" placeholder="Опишите, что ищете…" autocomplete="off"><button class="btn black" type="submit">→</button></form>
+    <div class="chat" id="chat" aria-live="polite"><div class="msg bot">Здравствуйте! Опишите, какое помещение ищете: тип, сколько человек или площадь, бюджет и метро. Найденные варианты подсвечу на карте.<span class="msg-time"></span></div></div>
+    <form class="chat-form" id="chat-form"><input class="input" name="q" placeholder="Сообщение…" autocomplete="off" aria-label="Сообщение AI-помощнику"><button class="send-btn" type="submit" aria-label="Отправить"><svg viewBox="0 0 24 24"><path d="M3 11l18-8-8 18-2-8z"/></svg></button></form>
   </div>
 </div>
 </main>
 <footer class="site-footer">
   <div class="wrap">
     <div class="cols">
-      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
-      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
-      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
-      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+      <div><h4>MoscSpace</h4><p>Офисы, склады, торговые помещения, залы и студии подкастов в Москве — на час или на год.</p><a href="tel:89997655467">8 999 - 765 - 54 - 67</a><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="discount.html">−20% от 6 месяцев</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html?type=podcast#search">Студии подкастов</a><a href="index.html#search">Подбор помещения</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
+      <div><h4>Аккаунт</h4><a href="account.html" data-auth="register">Регистрация</a><a href="account.html">Личный кабинет</a><a href="about.html">О нас</a><a href="privacy.html">Политика конфиденциальности</a></div>
     </div>
     <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
   </div>

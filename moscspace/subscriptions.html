@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("ms_theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <title>Подписки — MoscSpace</title>
 <meta name="description" content="Аренда помещений в Москве — MoscSpace">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
@@ -14,23 +15,54 @@
   <div class="wrap">
     <a class="logo" href="index.html">MoscSpace</a>
     <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
-    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="about.html">О нас</a></nav>
     <div class="header-contacts">
-      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div><a class="phone" href="tel:89997655467">8 999 - 765 - 54 - 67</a><br><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a></div>
       <div class="addr"><b>Тверская, 21</b><br>Москва</div>
-      <a class="account-link" href="register.html">Войти</a>
+      <button class="theme-toggle" type="button" aria-label="Сменить тему" title="Сменить тему"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>
+      <a class="account-link" href="account.html" data-auth>Войти</a>
     </div>
   </div>
 </header>
 <main>
-<section class="section darker">
-  <div class="wrap center">
-    <h1 style="font-size:clamp(28px,4vw,42px)">Подписки:</h1>
-    <p class="lead">Подписка даёт приоритетный доступ к новым объектам, персональный подбор от менеджера и бесплатную отмену бронирований.</p>
-    <div class="grid c3" style="margin-top:40px;text-align:center">
-      <div class="plan" data-plan="basic"><div class="top plan-basic"><h3>Базовый</h3><div class="price">499 рублей в месяц</div></div><div class="bottom"><p>Для тех, кому нужно решить вопрос здесь и сейчас.</p><a class="btn" href="pay.html?plan=basic">Оформить подписку</a></div></div>
-      <div class="plan" data-plan="optimal"><div class="top plan-optimal"><h3>Оптимальный</h3><div class="price">2 490 рублей за полгода</div></div><div class="bottom"><p>Для тех, кто в процессе активного подбора или смены локации. Экономия около 500 руб.</p><a class="btn" href="pay.html?plan=optimal">Оформить подписку</a></div></div>
-      <div class="plan" data-plan="premium"><div class="top plan-premium"><h3>Премиум</h3><div class="price">4 990 рублей в год</div></div><div class="bottom"><p>Идеально для инвесторов, субарендаторов и агентов. Всего ~415 руб/мес.</p><a class="btn" href="pay.html?plan=premium">Оформить подписку</a></div></div>
+<section class="section tariffs-page">
+  <div class="wrap">
+    <h1 class="center tariffs-title">Тарифы</h1>
+    <p class="center muted">Подписка снижает комиссию сайта и открывает больше одновременных броней. Отключить можно в любой момент.</p>
+    <article class="tariff-free" data-plan="free">
+      <div><h3>Бесплатно <span class="muted">· 0&nbsp;₽ / мес</span></h3><p class="tariff-tag">Для разовых задач</p></div>
+      <ul class="tariff-list inline"><li>Доступ ко всей карте и фильтрам</li><li>Строго 1 активное бронирование за раз</li><li>Стандартная сервисная комиссия — 10%</li></ul>
+      <div class="tariff-more" id="more-free"><p>Подходит, если помещение нужно время от времени: переговорная на вечер или склад на месяц. Когда бронь закончится или вы её отмените, можно оформить следующую. AI-помощник и все фильтры доступны без ограничений.</p></div>
+      <div class="free-actions"><button class="more-btn" type="button" aria-expanded="false" aria-controls="more-free">Показать полностью</button><span class="free-status" id="free-status"></span></div>
+    </article>
+    <div class="tariff-grid">
+      <article class="tariff tariff-basic" data-plan="basic">
+        <h3>Базовый</h3>
+        <div class="tariff-price"><b>149&nbsp;₽</b> / мес</div>
+        <p class="tariff-tag">Для тех, кто бронирует чаще</p>
+        <ul class="tariff-list"><li>До 2 активных бронирований одновременно</li><li>Сниженная сервисная комиссия — 5% на все заказы</li></ul>
+        <div class="tariff-more" id="more-basic"><ul class="tariff-list"><li>Всё из бесплатного тарифа: карта, фильтры, AI-помощник</li><li>Экономия начинается с первой брони: на заказе за 3 000 ₽ комиссия меньше на 150 ₽ — это почти вся цена подписки</li></ul></div>
+        <button class="more-btn" type="button" aria-expanded="false" aria-controls="more-basic">Показать полностью</button>
+        <a class="btn plan-btn-blue" href="pay.html?plan=basic">Подключить</a>
+      </article>
+      <article class="tariff tariff-optimal" data-plan="optimal"><span class="plan-badge">Выгодно</span>
+        <h3>Оптимальный</h3>
+        <div class="tariff-price"><b>299&nbsp;₽</b> / мес</div>
+        <p class="tariff-tag">Выбор малого бизнеса и фрилансеров</p>
+        <ul class="tariff-list"><li>Максимум 3 активных бронирования одновременно</li><li>0% комиссии сайта — чистая цена от владельцев площадок</li><li>Скидка 10% на долгосрочную аренду складов</li></ul>
+        <div class="tariff-more" id="more-optimal"><ul class="tariff-list"><li>3 брони по 5 000 ₽ в месяц на бесплатном тарифе — это 1 500 ₽ комиссии. С «Оптимальным» чистая экономия — 1 201 ₽ в месяц</li><li>Склады от 6 месяцев дешевле на 30%: 20% за срок и ещё 10% по тарифу</li><li>Цифровой смарт-ключ с QR-кодом в личном кабинете</li></ul></div>
+        <button class="more-btn" type="button" aria-expanded="false" aria-controls="more-optimal">Показать полностью</button>
+        <a class="btn plan-btn-green btn-pulse" href="pay.html?plan=optimal">Подключить</a>
+      </article>
+      <article class="tariff tariff-premium" data-plan="premium">
+        <h3>Премиум</h3>
+        <div class="tariff-price"><b>499&nbsp;₽</b> / мес</div>
+        <p class="tariff-tag">Для крупных компаний и event-агентств</p>
+        <ul class="tariff-list"><li>Полный безлимит: сколько угодно одновременных заказов</li><li>0% комиссии сайта + бесплатная отмена брони за 24 часа</li><li>Автоматическая генерация договоров аренды для юридических лиц</li></ul>
+        <div class="tariff-more" id="more-premium"><ul class="tariff-list"><li>Всё из «Оптимального», включая скидку 10% на склады</li><li>Договор с реквизитами вашей компании формируется в личном кабинете сразу после оплаты</li><li>Отмена не позже чем за сутки до начала возвращает всю сумму; консьерж-чат с личным менеджером</li></ul></div>
+        <button class="more-btn" type="button" aria-expanded="false" aria-controls="more-premium">Показать полностью</button>
+        <a class="btn plan-btn-gold" href="pay.html?plan=premium">Подключить</a>
+      </article>
     </div>
   </div>
 </section>
@@ -38,10 +70,10 @@
 <footer class="site-footer">
   <div class="wrap">
     <div class="cols">
-      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
-      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
-      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
-      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+      <div><h4>MoscSpace</h4><p>Офисы, склады, торговые помещения, залы и студии подкастов в Москве — на час или на год.</p><a href="tel:89997655467">8 999 - 765 - 54 - 67</a><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="discount.html">−20% от 6 месяцев</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html?type=podcast#search">Студии подкастов</a><a href="index.html#search">Подбор помещения</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
+      <div><h4>Аккаунт</h4><a href="account.html" data-auth="register">Регистрация</a><a href="account.html">Личный кабинет</a><a href="about.html">О нас</a><a href="privacy.html">Политика конфиденциальности</a></div>
     </div>
     <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
   </div>

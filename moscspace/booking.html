@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("ms_theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
 <title>Бронирование помещения — MoscSpace</title>
 <meta name="description" content="Аренда помещений в Москве — MoscSpace">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23262626'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='%23fff' font-family='Arial'%3EM%3C/text%3E%3C/svg%3E">
@@ -14,55 +15,72 @@
   <div class="wrap">
     <a class="logo" href="index.html">MoscSpace</a>
     <button class="burger" type="button" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
-    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="register.html">Регистрация</a></nav>
+    <nav class="main-nav"><a href="index.html">Главная</a><a href="offers.html">Спецпредложения</a><a href="map.html">Карта и AI-помощник</a><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a><a href="subscriptions.html">Подписки</a><a href="about.html">О нас</a></nav>
     <div class="header-contacts">
-      <div><a class="phone" href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><br><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a></div>
+      <div><a class="phone" href="tel:89997655467">8 999 - 765 - 54 - 67</a><br><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a></div>
       <div class="addr"><b>Тверская, 21</b><br>Москва</div>
-      <a class="account-link" href="register.html">Войти</a>
+      <button class="theme-toggle" type="button" aria-label="Сменить тему" title="Сменить тему"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>
+      <a class="account-link" href="account.html" data-auth>Войти</a>
     </div>
   </div>
 </header>
 <main>
-<section class="section dark">
-  <div class="wrap center">
-    <h2>Ваши контактные данные</h2>
-    <p class="lead">Укажите ваше имя, email и телефон, чтобы мы могли связаться с вами и подтвердить бронирование помещения.</p>
-    <div class="form" style="margin-top:20px">
-      <div id="booking-item"></div>
-      <div class="field"><label style="color:#fff">Срок аренды</label><select class="input" id="term"><option value="1">1 месяц</option><option value="3">3 месяца</option><option value="6">6 месяцев</option><option value="12">12 месяцев</option></select><div class="small muted" id="term-hint"></div></div>
+<section class="section light booking">
+  <div class="wrap">
+    <h1 class="booking-title">Бронирование</h1>
+    <div class="booking-grid">
+      <div class="booking-main">
+        <div id="booking-item"></div>
+        <form class="card booking-form" data-form="contacts" id="booking-form">
+          <div class="mode-switch hidden" id="mode-switch" role="radiogroup" aria-label="Срок аренды">
+            <button type="button" data-mode="hours" role="radio">По часам</button>
+            <button type="button" data-mode="months" role="radio">По месяцам</button>
+          </div>
+          <div class="grid c2 tight-grid" data-pane="hours">
+            <div class="field"><label for="b-hdate">Дата</label><input class="input" id="b-hdate" name="hdate" type="date" data-v="date"><div class="error-text"></div></div>
+            <div class="field"><label for="b-hstart">Начало</label><select class="input" id="b-hstart" name="hstart"></select></div>
+            <div class="field"><label for="b-hours">Сколько часов</label><select class="input" id="b-hours" name="hours"></select></div>
+          </div>
+          <div class="grid c2 tight-grid" data-pane="months">
+            <div class="field"><label for="b-mdate">Дата заезда</label><input class="input" id="b-mdate" name="mdate" type="date" data-v="date"><div class="error-text"></div></div>
+            <div class="field"><label for="term">Срок аренды</label><select class="input" id="term" name="term"><option value="1">1 месяц</option><option value="3">3 месяца</option><option value="6">6 месяцев</option><option value="12">12 месяцев</option></select></div>
+          </div>
+          <div class="discount-note" id="discount-note"></div>
+          <h3 class="form-sub">Контакты</h3>
+          <div class="field"><input class="input" name="name" type="text" placeholder="Ваше имя" data-v="name" autocomplete="name" data-fill="name"><div class="error-text"></div></div>
+          <div class="field"><div class="phone-wrap"><span class="cc">🇷🇺 +7</span><input class="input" name="phone" type="tel" inputmode="tel" placeholder="(000) 000-00-00" data-v="phone" data-mask="phone" autocomplete="tel-national"></div><div class="error-text"></div></div>
+          <div class="field"><input class="input" name="email" type="email" placeholder="Электронная почта" data-v="email" autocomplete="email" data-fill="email"><div class="error-text"></div></div>
+          <div class="limit-alert hidden" id="limit-alert" role="alert"></div>
+          <button class="btn black full" type="submit">Перейти к оплате</button>
+          <p class="small muted">Нажимая кнопку, вы принимаете <a href="privacy.html">политику конфиденциальности</a> и даёте согласие на обработку персональных данных.</p>
+        </form>
+        <form class="card booking-form hidden" id="pay-form" data-form="bookpay">
+          <h3 class="form-sub">Безопасная оплата</h3>
+          <div class="field"><input class="input" name="card" type="text" placeholder="Номер карты" data-v="card" inputmode="numeric" autocomplete="off" data-mask="card"><div class="error-text"></div></div>
+          <div class="grid c2 tight-grid">
+            <div class="field"><input class="input" name="exp" type="text" placeholder="Срок действия (ММ/ГГ)" data-v="expiry" inputmode="numeric" autocomplete="off" data-mask="expiry"><div class="error-text"></div></div>
+            <div class="field"><input class="input" name="cvc" type="password" placeholder="CVC" data-v="cvc" inputmode="numeric" autocomplete="off" data-mask="cvc"><div class="error-text"></div></div>
+          </div>
+          <button class="btn black full" type="submit">Оплатить <span class="pay-sum"></span></button>
+          <p class="notice">Учебный проект: оплата демонстрационная — деньги не списываются, данные карты никуда не отправляются и не сохраняются. Тестовая карта: 4242 4242 4242 4242, любой будущий срок и любой CVC.</p>
+        </form>
+      </div>
+      <aside class="glass-card booking-summary" aria-live="polite">
+        <h3>Расчёт</h3>
+        <dl class="kv calc-kv" id="quote"></dl>
+        <div class="plan-line" id="plan-line"></div>
+      </aside>
     </div>
-    <form class="form" data-form="contacts">
-      <div class="field"><input class="input" name="name" type="text" placeholder="Введите ваше имя" data-v="name" autocomplete="name" data-fill="name"><div class="error-text"></div></div>
-      <div class="field"><div class="phone-wrap"><span class="cc">🇷🇺 +7</span><input class="input" name="phone" type="tel" inputmode="tel" placeholder="(000) 000-00-00" data-v="phone" data-mask="phone" autocomplete="tel-national"></div><div class="error-text"></div></div>
-      <div class="field"><input class="input" name="email" type="email" placeholder="Ваша электронная почта" data-v="email" autocomplete="email" data-fill="email"><div class="error-text"></div></div>
-      <button class="btn blue full" type="submit">Перейти к оплате</button>
-      <p class="step-done hidden small center">✓ Контакты сохранены — заполните данные карты ниже.</p>
-    </form>
-    <p class="lead" style="max-width:640px;margin:40px auto 0">Нажимая кнопку, вы принимаете <a href="privacy.html">Политику конфиденциальности</a> и даете согласие на обработку персональных данных.</p>
-  </div>
-</section>
-<section class="section paper hidden">
-  <div class="wrap center">
-    <h2>Безопасная оплата</h2>
-    <p class="lead">Введите данные вашей карты. К оплате: <b class="pay-sum"></b> (первый месяц аренды)</p>
-    <form class="form" id="pay-form" data-form="bookpay">
-      
-  <div class="field"><input class="input" name="card" type="text" placeholder="Номер карты" data-v="card" inputmode="numeric" autocomplete="off" data-mask="card"><div class="error-text"></div></div>
-  <div class="field"><input class="input" name="exp" type="text" placeholder="Срок действия (ММ/ГГ)" data-v="expiry" inputmode="numeric" autocomplete="off" data-mask="expiry"><div class="error-text"></div></div>
-  <div class="field"><input class="input" name="cvc" type="password" placeholder="CVC" data-v="cvc" inputmode="numeric" autocomplete="off" data-mask="cvc"><div class="error-text"></div></div>
-  <button class="btn black full" type="submit">Оплатить <span class="pay-sum"></span></button>
-  <p class="notice">Учебный проект: оплата демонстрационная — деньги не списываются, данные карты никуда не отправляются и не сохраняются. Для проверки можно ввести тестовую карту 4242 4242 4242 4242, любой будущий срок и любой CVC.</p>
-    </form>
   </div>
 </section>
 </main>
 <footer class="site-footer">
   <div class="wrap">
     <div class="cols">
-      <div><h4>MoscSpace</h4><p>Аренда офисов, складов, торговых помещений и залов для встреч в Москве.</p><a href="tel:+79997655467">+8 999 - 765 - 54 - 67</a><a href="mailto:hello@madeontilda.com">hello@madeontilda.com</a><a href="map.html">Тверская, 21, Москва</a></div>
-      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="coworking.html">Рабочее место −20%</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html#search">Быстрый поиск</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
-      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a></div>
-      <div><h4>Аккаунт</h4><a href="register.html">Регистрация</a><a href="account.html">Личный кабинет</a><a href="privacy.html">Политика конфиденциальности</a></div>
+      <div><h4>MoscSpace</h4><p>Офисы, склады, торговые помещения, залы и студии подкастов в Москве — на час или на год.</p><a href="tel:89997655467">8 999 - 765 - 54 - 67</a><a href="mailto:rubinslava123@gmail.com">rubinslava123@gmail.com</a><a href="map.html">Тверская, 21, Москва</a></div>
+      <div><h4>Аренда</h4><a href="office.html">Офис в центре</a><a href="discount.html">−20% от 6 месяцев</a><a href="halls.html">Залы для встреч</a><a href="warehouses.html">Складские помещения</a><a href="index.html?type=podcast#search">Студии подкастов</a><a href="index.html#search">Подбор помещения</a></div>
+      <div><h4>Полезное</h4><a href="articles.html">Статьи</a><a href="terms.html">Условия аренды</a><a href="map.html">Карта и AI-помощник</a><a href="subscriptions.html">Подписки</a><a href="mortgage.html">Ипотека</a><a href="tradein.html">Трейд-ин</a></div>
+      <div><h4>Аккаунт</h4><a href="account.html" data-auth="register">Регистрация</a><a href="account.html">Личный кабинет</a><a href="about.html">О нас</a><a href="privacy.html">Политика конфиденциальности</a></div>
     </div>
     <div class="copy">© 2026 MoscSpace. Учебный проект: бронирования и оплаты демонстрационные, деньги не списываются.</div>
   </div>

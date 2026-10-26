@@ -45,6 +45,7 @@ index = read(SITE / "index.html")
 header = re.search(r"<header class=\"site-header\">.*?</header>", index, re.S).group(0)
 footer = re.search(r"<footer class=\"site-footer\">.*?</footer>", index, re.S).group(0)
 favicon = re.search(r'<link rel="icon"[^>]*>', index).group(0)
+theme_script = re.search(r'<script>try\{var t=localStorage.*?</script>', index).group(0)
 
 templates = []
 for p in pages:
@@ -60,6 +61,7 @@ doc = f"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{theme_script}
 <title>Аренда помещений в Москве — MoscSpace</title>
 <meta name="description" content="Аренда офисов, складов, торговых помещений и залов для встреч в Москве — MoscSpace">
 {favicon}
@@ -73,6 +75,7 @@ doc = f"""<!doctype html>
 {rewrite_links(footer)}
 {chr(10).join(templates)}
 {script(read(ASSETS / "vendor/leaflet/leaflet.js"))}
+{script(read(ASSETS / "vendor/qrcode.js"))}
 {script(read(ASSETS / "app.js"))}
 </body>
 </html>
